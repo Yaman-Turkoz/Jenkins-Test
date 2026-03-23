@@ -4,35 +4,20 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git 'https://github.com/your-repo.git'
             }
         }
 
         stage('Semgrep Scan') {
             steps {
                 script {
-                    sh '''
-                        docker run --rm \
-                          -v $(pwd):/src \
-                          returntocorp/semgrep \
-                          semgrep --config=auto /src \
-                          --json --output=/src/semgrep-results.json \
-                          || true
-                    '''
+                    docker.image('semgrep/semgrep').inside {
+                        sh """
+                        semgrep scan --config=auto
+                        """
+                    }
                 }
             }
-        }
-
-        stage('Print Results') {
-            steps {
-                sh 'cat semgrep-results.json'
-            }
-        }
-    }
-
-    post {
-        always {
-            archiveArtifacts artifacts: 'semgrep-results.json', allowEmptyArchive: true
         }
     }
 }
