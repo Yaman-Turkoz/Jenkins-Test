@@ -1,22 +1,30 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'semgrep/semgrep'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     stages {
         stage('Checkout') {
             steps {
-                git 'https://github.com/your-repo.git'
+                checkout scm
             }
         }
 
         stage('Semgrep Scan') {
             steps {
-                script {
-                    docker.image('semgrep/semgrep').inside {
-                        sh """
-                        semgrep scan --config=auto
-                        """
-                    }
-                }
+                sh '''
+                    semgrep scan --config=auto . \
+                    --json --output=semgrep-report.json
+                '''
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'semgrep-report.json'
             }
         }
     }
