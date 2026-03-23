@@ -26,7 +26,7 @@ pipeline {
             }
             steps {
                 sh '''
-                    semgrep scan \
+                    semgrep scan . \
                       --config=auto \
                       --json \
                       --output=semgrep-report.json
