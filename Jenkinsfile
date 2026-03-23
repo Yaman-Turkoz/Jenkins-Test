@@ -23,19 +23,5 @@ pipeline {
                 '''
             }
         }
-
-        stage('Analyze Results') {
-            steps {
-                sh '''
-                    cat semgrep-report.json
-                '''
-            }
-        }
-
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: 'semgrep-report.json'
-            }
-        }
     }
 }
