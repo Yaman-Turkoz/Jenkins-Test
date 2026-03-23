@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'semgrep/semgrep'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     stages {
         stage('Checkout') {
@@ -14,10 +9,25 @@ pipeline {
         }
 
         stage('Semgrep Scan') {
+            agent {
+                docker {
+                    image 'semgrep/semgrep'
+                }
+            }
             steps {
                 sh '''
-                    semgrep scan --config=auto . \
-                    --json --output=semgrep-report.json
+                    semgrep scan \
+                      --config=auto \
+                      --json \
+                      --output=semgrep-report.json
+                '''
+            }
+        }
+
+        stage('Analyze Results') {
+            steps {
+                sh '''
+                    cat semgrep-report.json
                 '''
             }
         }
