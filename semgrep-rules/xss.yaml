@@ -1,8 +1,8 @@
 rules:
   - id: php-xss-echo
     patterns:
-      - pattern:echo $X;
-      - pattern-not:echo htmlspecialchars($X);
+      - pattern: echo $X;
+      - pattern-not: echo htmlspecialchars($X);
     message: Potential XSS via echo
     severity: ERROR
     languages: [php]
