@@ -18,19 +18,6 @@ pipeline {
             }
         }
 
-        stage('Debug') {
-            steps {
-                sh '''
-                    echo "PWD:"
-                    pwd
-                    echo "FILES:"
-                    ls -la
-                    echo "RULES:"
-                    ls -la semgrep-rules || true
-                '''
-            }
-        }
-
         stage('Semgrep Scan') {
             steps {
                 sh '''
@@ -38,7 +25,8 @@ pipeline {
                       -v $(pwd):/src \
                       semgrep/semgrep \
                       semgrep scan /src \
-                      --config=/src/semgrep-rules --validate\
+                      --config=/src/semgrep-rules/xss.yaml \
+                      --validate \
                       --json \
                       --output=/src/semgrep-report.json
                 '''
