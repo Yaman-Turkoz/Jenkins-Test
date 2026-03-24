@@ -24,13 +24,11 @@ pipeline {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
-                              --user $(id -u):$(id -g) \
                               -v $(pwd):/src \
                               semgrep/semgrep \
                               semgrep scan /src \
                               --config=/src/semgrep-rules/xss.yaml \
-                              --json \
-                              --output=/src/semgrep-report.json
+                              --json > semgrep-report.json
                         ''',
                         returnStatus: true
                     )
