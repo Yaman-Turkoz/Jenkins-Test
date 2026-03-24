@@ -26,7 +26,6 @@ pipeline {
                       semgrep/semgrep \
                       semgrep scan /src \
                       --config=/src/semgrep-rules/xss.yaml \
-                      --validate \
                       --json \
                       --output=/src/semgrep-report.json
                 '''
