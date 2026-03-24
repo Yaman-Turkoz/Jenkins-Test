@@ -18,6 +18,19 @@ pipeline {
             }
         }
 
+        stage('Debug') {
+            steps {
+                sh '''
+                    echo "PWD:"
+                    pwd
+                    echo "FILES:"
+                    ls -la
+                    echo "RULES:"
+                    ls -la semgrep-rules || true
+                '''
+            }
+        }
+
         stage('Semgrep Scan') {
             steps {
                 sh '''
