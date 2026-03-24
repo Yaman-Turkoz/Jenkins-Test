@@ -38,7 +38,7 @@ pipeline {
                       -v $(pwd):/src \
                       semgrep/semgrep \
                       semgrep scan /src \
-                      --config=/src/semgrep-rules \
+                      --config=/src/semgrep-rules --validate\
                       --json \
                       --output=/src/semgrep-report.json
                 '''
