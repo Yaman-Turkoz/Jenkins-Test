@@ -1,12 +1,12 @@
 rules:
-  - id: test-echo
-    pattern: echo $X;
-    message: echo kullanımı
+  - id: test-php-echo
+    pattern: echo $VAR;
+    message: Debug echo usage
     severity: WARNING
     languages: [php]
 
-  - id: php-xss-var-dump
-    pattern: var_dump($X);
-    message: Debug output
+  - id: test-php-var-dump
+    pattern: var_dump($VAR);
+    message: Debug var_dump usage
     severity: WARNING
     languages: [php]
