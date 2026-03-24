@@ -19,17 +19,15 @@ pipeline {
         }
 
         stage('Semgrep Scan') {
-            agent {
-                docker {
-                    image 'semgrep/semgrep'
-                }
-            }
             steps {
                 sh '''
-                    semgrep scan . \
-                      --config=auto \
+                    docker run --rm \
+                      -v $(pwd):/src \
+                      semgrep/semgrep \
+                      semgrep scan /src \
+                      --config=/src/semgrep-rules \
                       --json \
-                      --output=semgrep-report.json
+                      --output=/src/semgrep-report.json
                 '''
             }
         }
