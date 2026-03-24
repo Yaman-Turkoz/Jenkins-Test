@@ -46,4 +46,9 @@ pipeline {
             }
         }
     }
+    post {
+        always {
+            archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
+        }
+    }
 }
