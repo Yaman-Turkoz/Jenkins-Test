@@ -24,6 +24,7 @@ pipeline {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
+                              --user $(id -u):$(id -g) \
                               -v $(pwd):/src \
                               semgrep/semgrep \
                               semgrep scan /src \
@@ -37,7 +38,6 @@ pipeline {
                         echo "Semgrep: Bulgu yok."
                     } else if (exitCode == 7) {
                         echo "Semgrep: Güvenlik bulgular tespit edildi! Raporu incele."
-                        // unstable() ile sarı build, ya da error() ile kırmızı yapabilirsin
                         unstable("Semgrep bulguları mevcut.")
                     } else {
                         error("Semgrep beklenmedik hatayla çıktı: ${exitCode}")
