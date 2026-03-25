@@ -18,19 +18,18 @@ pipeline {
             }
         }
 
-        // 👇 BURAYA EKLİYORSUN
         stage('Debug Workspace') {
             steps {
                 sh '''
-                    echo "WORKSPACE:"
-                    echo $WORKSPACE
+                    echo "PWD:"
+                    pwd
 
-                    echo "HOST FILES:"
-                    ls -la $WORKSPACE
+                    echo "FILES (host):"
+                    ls -la
 
-                    echo "CONTAINER FILES:"
+                    echo "FILES (container):"
                     docker run --rm \
-                      -v $WORKSPACE:/src \
+                      -v $(pwd):/src \
                       semgrep/semgrep \
                       ls -la /src
                 '''
@@ -43,7 +42,7 @@ pipeline {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
-                              -v $WORKSPACE:/src \
+                              -v $(pwd):/src \
                               semgrep/semgrep \
                               semgrep scan /src \
                               --config=/src/semgrep-rules/xss.yaml \
