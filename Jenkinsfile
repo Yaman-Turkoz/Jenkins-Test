@@ -1,7 +1,6 @@
 pipeline {
     agent any
 
-
     stages {
 
         stage('Debug Workspace') {
@@ -25,6 +24,7 @@ pipeline {
         stage('Semgrep Scan') {
             steps {
                 script {
+                    // Workspace içindeki semgrep-rules/xss.yaml kullanılıyor, host root'a kopyalama yok
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
@@ -53,7 +53,9 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
+            node { // FilePath context hatasını önlemek için node bloğu içine alın
+                archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
+            }
         }
     }
 }
