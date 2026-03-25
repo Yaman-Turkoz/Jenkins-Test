@@ -15,29 +15,14 @@ pipeline {
                 checkout scm
             }
         }
-        // 👇 BURAYA EKLİYORSUN
-        stage('Debug Workspace') {
-            steps {
-                sh '''
-                    echo "WORKSPACE:"
-                    echo $WORKSPACE
-                    echo "HOST FILES:"
-                    ls -la $WORKSPACE
-                    echo "CONTAINER FILES:"
-                    docker run --rm \
-                      -v $WORKSPACE:/src \
-                      semgrep/semgrep \
-                      ls -la /src
-                '''
-            }
-        }
+
         stage('Semgrep Scan') {
             steps {
                 script {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
-                              -v $WORKSPACE:/src \
+                              -v $(pwd):/src \
                               semgrep/semgrep \
                               semgrep scan /src \
                               --config=/src/semgrep-rules/xss.yaml \
@@ -57,6 +42,7 @@ pipeline {
             }
         }
     }
+
     post {
         always {
             archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
