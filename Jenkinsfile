@@ -43,14 +43,15 @@ pipeline {
                         script: '''
                             docker run --rm \
                                 -v $WORKSPACE:/src \
+                                -v $WORKSPACE/semgrep-rules/xss.yaml:/xss.yaml:ro \
                                 semgrep/semgrep \
                                 semgrep scan /src \
-                                --config=/src/semgrep-rules/xss.yaml \
+                                --config=/xss.yaml \
                                 --json > semgrep-report.json
                         ''',
                         returnStatus: true
                     )
-
+        
                     if (exitCode == 0) {
                         echo "Semgrep: Bulgu yok."
                     } else if (exitCode == 7) {
