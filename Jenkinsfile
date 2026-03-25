@@ -23,24 +23,23 @@ pipeline {
                         '/var/jenkins_home',
                         env.HOST_JENKINS_HOME
                     )
-                    def exitCode = sh(
-                        script: """
-                            docker run --rm \\
-                              -v ${hostWorkspace}:/src \\
-                              semgrep/semgrep \\
-                              semgrep scan /src \\
-                              --config=/src/semgrep-rules/xss.yaml \\
-                              --json > semgrep-report.json
-                        """,
-                        returnStatus: true
-                    )
-                    if (exitCode == 0) {
-                        echo "Semgrep: Bulgu yok."
-                    } else if (exitCode == 1 || exitCode == 7) {
-                        echo "Semgrep: Güvenlik bulguları tespit edildi!"
+                    sh """
+                        docker run --rm \\
+                          -v ${hostWorkspace}:/src \\
+                          semgrep/semgrep \\
+                          semgrep scan /src \\
+                          --config=/src/semgrep-rules/xss.yaml \\
+                          --json > semgrep-report.json
+                    """
+        
+                    def report = readJSON file: 'semgrep-report.json'
+                    def findings = report.results.size()
+        
+                    if (findings > 0) {
+                        echo "Semgrep: ${findings} güvenlik bulgusu tespit edildi!"
                         unstable("Semgrep bulguları mevcut.")
                     } else {
-                        error("Semgrep beklenmedik hatayla çıktı: ${exitCode}")
+                        echo "Semgrep: Bulgu yok."
                     }
                 }
             }
