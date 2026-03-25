@@ -19,15 +19,19 @@ pipeline {
         stage('Semgrep Scan') {
             steps {
                 script {
+                    def hostWorkspace = env.WORKSPACE.replace(
+                        '/var/jenkins_home',
+                        env.HOST_JENKINS_HOME
+                    )
                     def exitCode = sh(
-                        script: '''
-                            docker run --rm \
-                              -v $(pwd):/src \
-                              semgrep/semgrep \
-                              semgrep scan /src \
-                              --config=/src/semgrep-rules/xss.yaml \
+                        script: """
+                            docker run --rm \\
+                              -v ${hostWorkspace}:/src \\
+                              semgrep/semgrep \\
+                              semgrep scan /src \\
+                              --config=/src/semgrep-rules/xss.yaml \\
                               --json > semgrep-report.json
-                        ''',
+                        """,
                         returnStatus: true
                     )
                     if (exitCode == 0) {
