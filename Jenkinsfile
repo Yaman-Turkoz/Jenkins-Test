@@ -32,7 +32,8 @@ pipeline {
                           --json > semgrep-report.json
                     """
         
-                    def report = readJSON file: 'semgrep-report.json'
+                    def reportText = readFile('semgrep-report.json')
+                    def report = new groovy.json.JsonSlurper().parseText(reportText)
                     def findings = report.results.size()
         
                     if (findings > 0) {
