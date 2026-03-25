@@ -38,7 +38,7 @@ pipeline {
         
                     if (findings > 0) {
                         echo "Semgrep: ${findings} güvenlik bulgusu tespit edildi!"
-                        unstable("Semgrep bulguları mevcut.")
+                        error("Semgrep bulguları mevcut.")
                     } else {
                         echo "Semgrep: Bulgu yok."
                     }
