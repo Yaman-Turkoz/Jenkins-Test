@@ -36,7 +36,7 @@ pipeline {
                     )
                     if (exitCode == 0) {
                         echo "Semgrep: Bulgu yok."
-                    } else if (exitCode == 7) {
+                    } else if (exitCode == 1 || exitCode == 7) {
                         echo "Semgrep: Güvenlik bulguları tespit edildi!"
                         unstable("Semgrep bulguları mevcut.")
                     } else {
