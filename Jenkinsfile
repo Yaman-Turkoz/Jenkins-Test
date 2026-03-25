@@ -28,12 +28,12 @@ pipeline {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
-                                -v $WORKSPACE:/src \
-                                -v $WORKSPACE/semgrep-rules/xss.yaml:/xss.yaml:ro \
-                                semgrep/semgrep \
-                                semgrep scan /src \
-                                --config=/xss.yaml \
-                                --json > semgrep-report.json
+                            -v $WORKSPACE:/src \
+                            -v $WORKSPACE/semgrep-rules/xss.yaml:/xss.yaml:ro \
+                            semgrep/semgrep \
+                            semgrep scan /src \
+                            --config=/xss.yaml \
+                            --json > semgrep-report.json
                         ''',
                         returnStatus: true
                     )
