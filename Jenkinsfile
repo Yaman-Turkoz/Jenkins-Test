@@ -1,22 +1,8 @@
 pipeline {
     agent any
 
-    options {
-        skipDefaultCheckout(true)
-    }
 
     stages {
-        stage('Clean Workspace') {
-            steps {
-                deleteDir()
-            }
-        }
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Debug Workspace') {
             steps {
