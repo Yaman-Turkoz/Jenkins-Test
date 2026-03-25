@@ -1,8 +1,10 @@
 pipeline {
     agent any
+
     options {
         skipDefaultCheckout(true)
     }
+
     stages {
         stage('Clean Workspace') {
             steps {
@@ -13,6 +15,25 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        // 👇 BURAYA EKLİYORSUN
+        stage('Debug Workspace') {
+            steps {
+                sh '''
+                    echo "WORKSPACE:"
+                    echo $WORKSPACE
+
+                    echo "HOST FILES:"
+                    ls -la $WORKSPACE
+
+                    echo "CONTAINER FILES:"
+                    docker run --rm \
+                      -v $WORKSPACE:/src \
+                      semgrep/semgrep \
+                      ls -la /src
+                '''
             }
         }
 
