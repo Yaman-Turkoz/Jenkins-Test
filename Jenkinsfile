@@ -1,10 +1,8 @@
 pipeline {
     agent any
-
     options {
         skipDefaultCheckout(true)
     }
-
     stages {
         stage('Clean Workspace') {
             steps {
@@ -19,35 +17,32 @@ pipeline {
         }
 
         stage('Semgrep Scan') {
-    steps {
-        script {
-            // Önce workspace içeriğini görelim
-            sh 'ls -la'
-            sh 'ls -la semgrep-rules/ || echo "semgrep-rules klasörü YOK"'
-
-            def exitCode = sh(
-                script: '''
-                    docker run --rm \
-                      -v $(pwd):/src \
-                      semgrep/semgrep \
-                      semgrep scan /src \
-                      --config=/src/semgrep-rules/xss.yaml \
-                      --json > semgrep-report.json
-                ''',
-                returnStatus: true
-            )
-            if (exitCode == 0) {
-                echo "Semgrep: Bulgu yok."
-            } else if (exitCode == 7) {
-                echo "Semgrep: Güvenlik bulgular tespit edildi! Raporu incele."
-                unstable("Semgrep bulguları mevcut.")
-            } else {
-                error("Semgrep beklenmedik hatayla çıktı: ${exitCode}")
+            steps {
+                script {
+                    def exitCode = sh(
+                        script: '''
+                            docker run --rm \
+                              -v $(pwd):/src \
+                              semgrep/semgrep \
+                              semgrep scan /src \
+                              --config=/src/semgrep-rules/xss.yaml \
+                              --json > semgrep-report.json
+                        ''',
+                        returnStatus: true
+                    )
+                    if (exitCode == 0) {
+                        echo "Semgrep: Bulgu yok."
+                    } else if (exitCode == 7) {
+                        echo "Semgrep: Güvenlik bulgular tespit edildi! Raporu incele."
+                        unstable("Semgrep bulguları mevcut.")
+                    } else {
+                        error("Semgrep beklenmedik hatayla çıktı: ${exitCode}")
+                    }
+                }
             }
         }
     }
-}
-    }
+
     post {
         always {
             archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
