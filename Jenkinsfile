@@ -11,7 +11,7 @@ pipeline {
                 deleteDir()
             }
         }
-        
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -21,17 +21,17 @@ pipeline {
         stage('Debug Workspace') {
             steps {
                 sh '''
-                    echo "PWD:"
-                    pwd
+                    echo "WORKSPACE:"
+                    echo $WORKSPACE
 
                     echo "FILES (host):"
-                    ls -la
+                    ls -la $WORKSPACE
 
                     echo "FILES (container):"
                     docker run --rm \
-                      -v $(pwd):/src \
-                      semgrep/semgrep \
-                      ls -la /src
+                        -v $WORKSPACE:/src \
+                        semgrep/semgrep \
+                        ls -la /src
                 '''
             }
         }
@@ -42,14 +42,15 @@ pipeline {
                     def exitCode = sh(
                         script: '''
                             docker run --rm \
-                              -v $(pwd):/src \
-                              semgrep/semgrep \
-                              semgrep scan /src \
-                              --config=/src/semgrep-rules/xss.yaml \
-                              --json > semgrep-report.json
+                                -v $WORKSPACE:/src \
+                                semgrep/semgrep \
+                                semgrep scan /src \
+                                --config=/src/semgrep-rules/xss.yaml \
+                                --json > semgrep-report.json
                         ''',
                         returnStatus: true
                     )
+
                     if (exitCode == 0) {
                         echo "Semgrep: Bulgu yok."
                     } else if (exitCode == 7) {
