@@ -41,15 +41,33 @@ jobs:
               data = json.load(f)
 
           results = data.get('results', [])
+          repo  = os.environ['REPO']
+          token = os.environ['GH_TOKEN']
+          env   = {**os.environ, "GH_TOKEN": token}
+
+          # Mevcut tüm [Semgrep] issue'larını sil
+          existing = subprocess.run([
+              "gh", "issue", "list",
+              "--repo", repo,
+              "--state", "open",
+              "--label", "security",
+              "--search", "[Semgrep]",
+              "--json", "number",
+              "--jq", ".[].number"
+          ], capture_output=True, text=True, env=env)
+
+          for number in existing.stdout.strip().splitlines():
+              subprocess.run([
+                  "gh", "issue", "delete", number,
+                  "--repo", repo,
+                  "--yes"
+              ], env=env)
+              print(f"🗑️  Issue #{number} silindi")
 
           if not results:
               print("Temiz! Issue açılmayacak.")
               exit(0)
 
-          repo  = os.environ['REPO']
-          token = os.environ['GH_TOKEN']
-
-          # rule_id → okunabilir issue başlığı eşlemesi
           RULE_TITLES = {
               'xss-and-debug':  'XSS & Debug Vulnerabilities',
               'code-injection': 'Code Injection Vulnerabilities',
@@ -58,34 +76,21 @@ jobs:
           # Bulguları rule_id'ye göre grupla
           groups = defaultdict(list)
           for result in results:
-              rule_id = result['check_id'].split('.')[-1]  # klasör prefix'ini at
+              rule_id = result['check_id'].split('.')[-1]
               groups[rule_id].append(result)
 
           for rule_id, findings in groups.items():
               human_title = RULE_TITLES.get(rule_id, rule_id)
               title = f"[Semgrep] {human_title}"
 
-              # Aynı başlıklı açık issue var mı?
-              check = subprocess.run([
-                  "gh", "issue", "list",
-                  "--repo", repo,
-                  "--state", "open",
-                  "--search", title,
-                  "--json", "title",
-                  "--jq", ".[].title"
-              ], capture_output=True, text=True,
-                 env={**os.environ, "GH_TOKEN": token})
-
-              existing_titles = check.stdout.strip().splitlines()
-
-              if title in existing_titles:
-                  print(f"⏭️  Zaten açık issue var, atlanıyor: {title}")
-                  continue
-
-              # Her bulguyu ayrı satırda listele
+              # Her bulguyu detaylıyla listele
               findings_md = ""
               for f in findings:
-                  findings_md += f"- `{f['path']}` — satır {f['start']['line']}\n"
+                  matched_code = f['extra'].get('lines', '').strip()
+                  findings_md += (
+                      f"**`{f['path']}` — satır {f['start']['line']}**\n"
+                      f"```php\n{matched_code}\n```\n\n"
+                  )
 
               message = findings[0]['extra']['message']
 
@@ -96,7 +101,7 @@ jobs:
             ### Açıklama
             {message}
             
-            ### Tespit Edilen Konumlar
+            ### Tespit Edilen Konumlar ({len(findings)} bulgu)
             {findings_md}
             ---
             *Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
@@ -108,15 +113,8 @@ jobs:
                   "--title", title,
                   "--body", body,
                   "--label", "security"
-              ], env={**os.environ, "GH_TOKEN": token})
+              ], env=env)
 
-              print(f"✅ Issue açıldı: {title}")
+              print(f"✅ Issue açıldı: {title} ({len(findings)} bulgu)")
 
           EOF
-
-      - name: Upload Semgrep report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: semgrep-report
-          path: semgrep-report.json
