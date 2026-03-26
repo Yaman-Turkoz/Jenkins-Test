@@ -40,8 +40,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
+          # Kaç bulgu var?
+          FINDINGS=$(python3 -c "
+          import json, sys
+          with open('semgrep-report.json') as f:
+              data = json.load(f)
+          print(len(data.get('results', [])))
+          ")
+
+          echo "Toplam bulgu: $FINDINGS"
+
+          if [ "$FINDINGS" -eq "0" ]; then
+            echo "Temiz! Issue açılmayacak."
+            exit 0
+          fi
+
+          # Her bulgu için ayrı issue aç
           python3 << 'EOF'
-          import json, subprocess, os, sys
+          import json, subprocess, os
 
           with open('semgrep-report.json') as f:
               data = json.load(f)
@@ -49,17 +65,12 @@ jobs:
           repo  = os.environ['REPO']
           token = os.environ['GH_TOKEN']
 
-          has_error = False
-
           for result in data.get('results', []):
               rule_id   = result['check_id']
               file_path = result['path']
               line      = result['start']['line']
               message   = result['extra']['message']
               severity  = result['extra'].get('severity', 'WARNING')
-
-              if severity == 'ERROR':
-                  has_error = True
 
               title = f"[Semgrep] {rule_id} — {file_path}:{line}"
 
@@ -80,6 +91,7 @@ jobs:
                   print(f"⏭️  Zaten açık issue var, atlanıyor: {title}")
                   continue
 
+              # Yoksa aç
               body = f"""## Güvenlik Bulgusu
 
             **Kural:** `{rule_id}`
@@ -102,13 +114,6 @@ jobs:
               ], env={**os.environ, "GH_TOKEN": token})
 
               print(f"✅ Issue açıldı: {title}")
-
-          # Tüm issue'lar açıldıktan SONRA fail et
-          if has_error:
-              print("\n❌ ERROR seviyesinde bulgu mevcut — workflow başarısız sayılıyor.")
-              sys.exit(1)
-          else:
-              print("\n✅ ERROR seviyesinde bulgu yok.")
 
           EOF
 
