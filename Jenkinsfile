@@ -1,8 +1,10 @@
 pipeline {
     agent any
+
     options {
         skipDefaultCheckout(true)
     }
+
     stages {
         stage('Clean Workspace') {
             steps {
@@ -23,24 +25,25 @@ pipeline {
                         '/var/jenkins_home',
                         env.HOST_JENKINS_HOME
                     )
+
                     sh """
                         docker run --rm \\
-                          -v ${hostWorkspace}:/src \\
-                          semgrep/semgrep \\
-                          semgrep scan /src \\
-                          --config=/src/semgrep-rules/xss.yaml \\
-                          --json > semgrep-report.json
+                            -v ${hostWorkspace}:/src \\
+                            semgrep/semgrep \\
+                            semgrep scan /src \\
+                            --config=/src/semgrep-rules/pipeline-rules.yaml \\
+                            --json > semgrep-report.json || true
                     """
-        
+
                     def reportText = readFile('semgrep-report.json')
-                    def report = new groovy.json.JsonSlurper().parseText(reportText)
-                    def findings = report.results.size()
-        
+                    def report    = new groovy.json.JsonSlurper().parseText(reportText)
+                    def findings  = report.results.size()
+
                     if (findings > 0) {
-                        echo "Semgrep: ${findings} güvenlik bulgusu tespit edildi!"
-                        error("Semgrep bulguları mevcut.")
+                        echo "Semgrep: ${findings} critical finding(s) detected."
+                        error("Semgrep: Pipeline failed due to critical findings.")
                     } else {
-                        echo "Semgrep: Bulgu yok."
+                        echo "Semgrep: No findings."
                     }
                 }
             }
