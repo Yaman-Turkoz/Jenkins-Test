@@ -23,7 +23,7 @@ jobs:
         run: |
           pip install semgrep
           semgrep scan \
-            --config=semgrep-rules/xss.yaml \
+            --config=semgrep-rules/workflow-rules.yaml \
             --json \
             --output=semgrep-report.json \
             . || true
