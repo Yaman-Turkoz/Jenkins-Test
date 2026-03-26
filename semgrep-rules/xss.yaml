@@ -1,12 +1,32 @@
 rules:
-  - id: test-echo
+  - id: xss-echo-user-input
     pattern: echo $VAR;
-    message: echo kullanımı
+    message: >
+      Kullanıcıdan gelen veri doğrudan echo ile çıktılanıyor.
+      Bu, Reflected XSS (Cross-Site Scripting) açığına yol açabilir.
     severity: WARNING
     languages: [php]
 
-  - id: test-var-dump
+  - id: debug-var-dump
     pattern: var_dump($VAR);
-    message: var_dump kullanımı
+    message: >
+      var_dump() çağrısı production kodunda tespit edildi.
+      Hassas değişken içerikleri kullanıcıya sızdırılabilir.
     severity: WARNING
+    languages: [php]
+
+  - id: code-injection-eval
+    pattern: eval($VAR);
+    message: >
+      eval() kullanımı tespit edildi. Kullanıcı girdisi veya dış kaynaklı
+      veriler eval()'e geçirilirse uzaktan kod çalıştırma (RCE) açığı oluşur.
+    severity: ERROR
+    languages: [php]
+
+  - id: command-injection-shell-exec
+    pattern: shell_exec($VAR);
+    message: >
+      shell_exec() kullanımı tespit edildi. Kontrol edilmemiş girdiler
+      komut enjeksiyonuna (Command Injection) yol açabilir.
+    severity: ERROR
     languages: [php]
