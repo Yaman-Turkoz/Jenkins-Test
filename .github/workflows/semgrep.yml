@@ -118,3 +118,10 @@ jobs:
               print(f"✅ Issue açıldı: {title} ({len(findings)} bulgu)")
 
           EOF
+
+      - name: Upload Semgrep report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
