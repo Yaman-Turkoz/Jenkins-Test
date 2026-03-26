@@ -62,7 +62,7 @@ jobs:
           with open('semgrep-report.json') as f:
               data = json.load(f)
 
-          repo = os.environ['REPO']
+          repo  = os.environ['REPO']
           token = os.environ['GH_TOKEN']
 
           for result in data.get('results', []):
@@ -73,20 +73,38 @@ jobs:
               severity  = result['extra'].get('severity', 'WARNING')
 
               title = f"[Semgrep] {rule_id} — {file_path}:{line}"
-              body  = f"""## Güvenlik Bulgusu
 
-          **Kural:** `{rule_id}`
-          **Dosya:** `{file_path}`
-          **Satır:** {line}
-          **Önem:** {severity}
+              # Aynı başlıklı açık issue var mı kontrol et
+              check = subprocess.run([
+                  "gh", "issue", "list",
+                  "--repo", repo,
+                  "--state", "open",
+                  "--search", title,
+                  "--json", "title",
+                  "--jq", ".[].title"
+              ], capture_output=True, text=True,
+                 env={**os.environ, "GH_TOKEN": token})
 
-          ### Açıklama
-          {message}
+              existing_titles = check.stdout.strip().splitlines()
 
-          ---
-          *Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
-          """
+              if title in existing_titles:
+                  print(f"⏭️  Zaten açık issue var, atlanıyor: {title}")
+                  continue
 
+              # Yoksa aç
+              body = f"""## Güvenlik Bulgusu
+
+            **Kural:** `{rule_id}`
+            **Dosya:** `{file_path}`
+            **Satır:** {line}
+            **Önem:** {severity}
+            
+            ### Açıklama
+            {message}
+            
+            ---
+            *Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
+            """
               subprocess.run([
                   "gh", "issue", "create",
                   "--repo", repo,
@@ -94,6 +112,8 @@ jobs:
                   "--body", body,
                   "--label", "security"
               ], env={**os.environ, "GH_TOKEN": token})
+
+              print(f"✅ Issue açıldı: {title}")
 
           EOF
 
