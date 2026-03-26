@@ -26,7 +26,12 @@ jobs:
             --config=semgrep-rules/xss.yaml \
             --json \
             --output=semgrep-report.json \
-            . || true
+            . 
+          echo "--- Semgrep exit code: $?"
+          echo "--- Dosya boyutu:"
+          ls -lh semgrep-report.json
+          echo "--- Dosya içeriği:"
+          cat semgrep-report.json
 
       - name: Create GitHub Issues for findings
         env:
