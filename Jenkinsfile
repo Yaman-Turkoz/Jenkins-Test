@@ -21,24 +21,22 @@ pipeline {
         stage('Semgrep Scan') {
             steps {
                 script {
-                    def hostWorkspace = env.WORKSPACE.replace(
-                        '/var/jenkins_home',
-                        env.HOST_JENKINS_HOME
-                    )
-
                     sh """
-                        docker run --rm \\
-                            -v ${hostWorkspace}:/src \\
-                            semgrep/semgrep \\
-                            semgrep scan /src \\
-                            --config=/src/semgrep-rules/pipeline-rules.yaml \\
-                            --json > semgrep-report.json || true
+                        semgrep scan . \
+                            --config=semgrep-rules/pipeline-rules.yaml \
+                            --json \
+                            --output=semgrep-report.json || true
                     """
-
-                    def reportText = readFile('semgrep-report.json')
-                    def report    = new groovy.json.JsonSlurper().parseText(reportText)
-                    def findings  = report.results.size()
-
+        
+                    def reportText = readFile('semgrep-report.json').trim()
+        
+                    if (!reportText) {
+                        error("Semgrep report is empty. Scan may have failed.")
+                    }
+        
+                    def report   = new groovy.json.JsonSlurper().parseText(reportText)
+                    def findings = report.results.size()
+        
                     if (findings > 0) {
                         echo "Semgrep: ${findings} critical finding(s) detected."
                         error("Semgrep: Pipeline failed due to critical findings.")
