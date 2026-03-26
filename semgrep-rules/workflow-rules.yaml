@@ -1,0 +1,11 @@
+rules:
+  - id: xss-and-debug
+    pattern-either:
+      - pattern: echo $VAR;
+      - pattern: var_dump($VAR);
+    message: >
+      User-supplied data is being directly output or a debug function
+      has been detected in production code. This may lead to XSS
+      vulnerabilities or sensitive data leakage.
+    languages: [php]
+    severity: WARNING
