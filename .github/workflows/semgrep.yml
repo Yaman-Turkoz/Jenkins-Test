@@ -19,15 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Semgrep
-        run: |
-          pip install semgrep
-          semgrep scan \
-            --config=semgrep-rules/xss.yaml \
-            --json \
-            --output=semgrep-report.json \
-            . || true
-
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,24 +36,23 @@ jobs:
           token = os.environ['GH_TOKEN']
           env   = {**os.environ, "GH_TOKEN": token}
 
-          # Mevcut tüm [Semgrep] issue'larını sil
+          # Mevcut [Semgrep] issue'larını kapat
           existing = subprocess.run([
               "gh", "issue", "list",
               "--repo", repo,
               "--state", "open",
               "--label", "security",
-              "--search", "[Semgrep]",
-              "--json", "number",
-              "--jq", ".[].number"
+              "--json", "number,title",
+              "--jq", '.[] | select(.title | startswith("[Semgrep]")) | .number'
           ], capture_output=True, text=True, env=env)
 
           for number in existing.stdout.strip().splitlines():
               subprocess.run([
-                  "gh", "issue", "delete", number,
+                  "gh", "issue", "close", number,
                   "--repo", repo,
-                  "--yes"
+                  "--comment", "Yeni Semgrep taraması başlatıldı, bu issue yenileniyor."
               ], env=env)
-              print(f"🗑️  Issue #{number} silindi")
+              print(f"🔒 Issue #{number} kapatıldı")
 
           if not results:
               print("Temiz! Issue açılmayacak.")
@@ -83,12 +73,24 @@ jobs:
               human_title = RULE_TITLES.get(rule_id, rule_id)
               title = f"[Semgrep] {human_title}"
 
-              # Her bulguyu detaylıyla listele
               findings_md = ""
               for f in findings:
-                  matched_code = f['extra'].get('lines', '').strip()
+                  # Dosyadan ilgili satırı oku
+                  try:
+                      with open(f['path']) as src:
+                          file_lines = src.readlines()
+                          matched_code = file_lines[f['start']['line'] - 1].strip()
+                  except Exception:
+                      matched_code = "(satır okunamadı)"
+
+                  # Hangi fonksiyon/yapı eşleşti
+                  check_id     = f['check_id'].split('.')[-1]
+                  rule_message = f['extra']['message'].split('.')[0]
+
                   findings_md += (
-                      f"**`{f['path']}` — satır {f['start']['line']}**\n"
+                      f"**`{f['path']}` — satır {f['start']['line']}** "
+                      f"(`{check_id}`)\n"
+                      f"> {rule_message}\n"
                       f"```php\n{matched_code}\n```\n\n"
                   )
 
