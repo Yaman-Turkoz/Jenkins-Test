@@ -91,16 +91,16 @@ jobs:
 
               body = f"""## Güvenlik Bulgusu
 
-**Kural:** `{rule_id}`
-
-### Açıklama
-{message}
-
-### Tespit Edilen Konumlar
-{findings_md}
----
-*Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
-"""
+            **Kural:** `{rule_id}`
+            
+            ### Açıklama
+            {message}
+            
+            ### Tespit Edilen Konumlar
+            {findings_md}
+            ---
+            *Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
+            """
 
               subprocess.run([
                   "gh", "issue", "create",
