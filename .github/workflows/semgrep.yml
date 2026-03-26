@@ -1,6 +1,5 @@
 name: Semgrep Security Scan
 
-# Ne zaman tetiklensin?
 on:
   push:
     branches: ["main"]
@@ -12,17 +11,14 @@ jobs:
     name: Semgrep Scan
     runs-on: ubuntu-latest
 
-    # Issue açabilmek için bu izni veriyoruz
     permissions:
       issues: write
       contents: read
 
     steps:
-      # 1. Kodu çek
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Semgrep'i kur ve çalıştır, sonucu JSON'a yaz
       - name: Run Semgrep
         run: |
           pip install semgrep
@@ -31,50 +27,45 @@ jobs:
             --json \
             --output=semgrep-report.json \
             . || true
-          # "|| true" → semgrep bulgu bulunca exit code 1 verir,
-          # bu adımı fail ettirmemek için ekliyoruz
 
-      # 3. Sonucu oku, bulgu varsa issue aç
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Kaç bulgu var?
-          FINDINGS=$(python3 -c "
-          import json, sys
-          with open('semgrep-report.json') as f:
-              data = json.load(f)
-          print(len(data.get('results', [])))
-          ")
-
-          echo "Toplam bulgu: $FINDINGS"
-
-          if [ "$FINDINGS" -eq "0" ]; then
-            echo "Temiz! Issue açılmayacak."
-            exit 0
-          fi
-
-          # Her bulgu için ayrı issue aç
           python3 << 'EOF'
           import json, subprocess, os
+          from collections import defaultdict
 
           with open('semgrep-report.json') as f:
               data = json.load(f)
+
+          results = data.get('results', [])
+
+          if not results:
+              print("Temiz! Issue açılmayacak.")
+              exit(0)
 
           repo  = os.environ['REPO']
           token = os.environ['GH_TOKEN']
 
-          for result in data.get('results', []):
-              rule_id   = result['check_id']
-              file_path = result['path']
-              line      = result['start']['line']
-              message   = result['extra']['message']
-              severity  = result['extra'].get('severity', 'WARNING')
+          # rule_id → okunabilir issue başlığı eşlemesi
+          RULE_TITLES = {
+              'xss-and-debug':  'XSS & Debug Vulnerabilities',
+              'code-injection': 'Code Injection Vulnerabilities',
+          }
 
-              title = f"[Semgrep] {rule_id} — {file_path}:{line}"
+          # Bulguları rule_id'ye göre grupla
+          groups = defaultdict(list)
+          for result in results:
+              rule_id = result['check_id'].split('.')[-1]  # klasör prefix'ini at
+              groups[rule_id].append(result)
 
-              # Aynı başlıklı açık issue var mı kontrol et
+          for rule_id, findings in groups.items():
+              human_title = RULE_TITLES.get(rule_id, rule_id)
+              title = f"[Semgrep] {human_title}"
+
+              # Aynı başlıklı açık issue var mı?
               check = subprocess.run([
                   "gh", "issue", "list",
                   "--repo", repo,
@@ -91,20 +82,26 @@ jobs:
                   print(f"⏭️  Zaten açık issue var, atlanıyor: {title}")
                   continue
 
-              # Yoksa aç
+              # Her bulguyu ayrı satırda listele
+              findings_md = ""
+              for f in findings:
+                  findings_md += f"- `{f['path']}` — satır {f['start']['line']}\n"
+
+              message = findings[0]['extra']['message']
+
               body = f"""## Güvenlik Bulgusu
 
-            **Kural:** `{rule_id}`
-            **Dosya:** `{file_path}`
-            **Satır:** {line}
-            **Önem:** {severity}
-            
-            ### Açıklama
-            {message}
-            
-            ---
-            *Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
-            """
+**Kural:** `{rule_id}`
+
+### Açıklama
+{message}
+
+### Tespit Edilen Konumlar
+{findings_md}
+---
+*Bu issue GitHub Actions Semgrep taraması tarafından otomatik oluşturuldu.*
+"""
+
               subprocess.run([
                   "gh", "issue", "create",
                   "--repo", repo,
@@ -117,7 +114,6 @@ jobs:
 
           EOF
 
-      # 4. Raporu artifact olarak sakla (isteğe bağlı ama faydalı)
       - name: Upload Semgrep report
         uses: actions/upload-artifact@v4
         if: always()
