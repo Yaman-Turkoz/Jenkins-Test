@@ -18,4 +18,3 @@ $output = shell_exec($command);
 echo $output;
 
 echo $name;
-
