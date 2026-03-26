@@ -8,6 +8,7 @@ rules:
       production kodunda tespit edildi. XSS açığına ya da hassas veri
       sızıntısına yol açabilir.
     languages: [php]
+    severity: WARNING
 
   - id: code-injection
     pattern-either:
@@ -17,3 +18,4 @@ rules:
       Tehlikeli kod veya komut çalıştırma fonksiyonu tespit edildi.
       Kontrol edilmemiş girdiler RCE veya komut enjeksiyonuna yol açabilir.
     languages: [php]
+    severity: ERROR
