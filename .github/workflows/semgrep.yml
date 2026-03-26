@@ -25,11 +25,8 @@ jobs:
           semgrep scan \
             --config=semgrep-rules/xss.yaml \
             --json \
-            . > semgrep-report.json || true
-          echo "--- Exit code: $?"
-          echo "--- Dosya boyutu: $(wc -c < semgrep-report.json) byte"
-          echo "--- JSON içeriği:"
-          cat semgrep-report.json
+            --output=semgrep-report.json \
+            . || true
 
       - name: Create GitHub Issues for findings
         env:
@@ -41,40 +38,34 @@ jobs:
           from collections import defaultdict
 
           with open('semgrep-report.json') as f:
-              raw = f.read()
+              data = json.load(f)
 
-          print(f"Dosya boyutu: {len(raw)} byte")
-
-          data = json.loads(raw)
           results = data.get('results', [])
-
-          print(f"Toplam bulgu: {len(results)}")
 
           if not results:
               print("Temiz! Issue açılmayacak.")
               exit(0)
 
-          # bulguları logla
-          for r in results:
-              print(f"  → {r['check_id']} | {r['path']}:{r['start']['line']}")
-
           repo  = os.environ['REPO']
           token = os.environ['GH_TOKEN']
 
+          # rule_id → okunabilir issue başlığı eşlemesi
           RULE_TITLES = {
               'xss-and-debug':  'XSS & Debug Vulnerabilities',
               'code-injection': 'Code Injection Vulnerabilities',
           }
 
+          # Bulguları rule_id'ye göre grupla
           groups = defaultdict(list)
           for result in results:
-              rule_id = result['check_id'].split('.')[-1]
+              rule_id = result['check_id'].split('.')[-1]  # klasör prefix'ini at
               groups[rule_id].append(result)
 
           for rule_id, findings in groups.items():
               human_title = RULE_TITLES.get(rule_id, rule_id)
               title = f"[Semgrep] {human_title}"
 
+              # Aynı başlıklı açık issue var mı?
               check = subprocess.run([
                   "gh", "issue", "list",
                   "--repo", repo,
@@ -91,6 +82,7 @@ jobs:
                   print(f"⏭️  Zaten açık issue var, atlanıyor: {title}")
                   continue
 
+              # Her bulguyu ayrı satırda listele
               findings_md = ""
               for f in findings:
                   findings_md += f"- `{f['path']}` — satır {f['start']['line']}\n"
