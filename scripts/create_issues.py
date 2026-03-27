@@ -9,24 +9,6 @@ repo  = os.environ['REPO']
 token = os.environ['GH_TOKEN']
 env   = {**os.environ, "GH_TOKEN": token}
 
-# Close existing [Semgrep] issues
-existing = subprocess.run([
-    "gh", "issue", "list",
-    "--repo", repo,
-    "--state", "open",
-    "--label", "security",
-    "--json", "number,title",
-    "--jq", '.[] | select(.title | startswith("[Semgrep]")) | .number'
-], capture_output=True, text=True, env=env)
-
-for number in existing.stdout.strip().splitlines():
-    subprocess.run([
-        "gh", "issue", "close", number,
-        "--repo", repo,
-        "--comment", "A new Semgrep scan has started. This issue is being refreshed."
-    ], env=env)
-    print(f"Closed issue #{number}")
-
 if not results:
     print("No findings. No issues will be created.")
     exit(0)
@@ -56,6 +38,11 @@ for rule_id, findings in groups.items():
         except Exception:
             matched_code = "(could not read line)"
 
+        # Skip PHP closing tag false positives
+        if matched_code.strip() in ('?>', '?>'):
+            print(f"Skipping false positive at {f['path']}:{f['start']['line']}")
+            continue
+
         check_id     = f['check_id'].split('.')[-1]
         rule_message = f['extra']['message'].split('.')[0]
 
@@ -65,6 +52,24 @@ for rule_id, findings in groups.items():
             f"> {rule_message}\n"
             f"```php\n{matched_code}\n```\n\n"
         )
+
+    if not findings_md:
+        print(f"All findings for '{rule_id}' were false positives. Skipping issue.")
+        continue
+
+    # Check for duplicate open issue
+    check = subprocess.run([
+        "gh", "issue", "list",
+        "--repo", repo,
+        "--state", "open",
+        "--label", "security",
+        "--json", "number,title",
+        "--jq", f'.[] | select(.title == "{title}") | .number'
+    ], capture_output=True, text=True, env=env)
+
+    if check.stdout.strip():
+        print(f"Open issue already exists, skipping: {title}")
+        continue
 
     message = findings[0]['extra']['message']
 
