@@ -18,15 +18,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get changed PHP files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only HEAD~1 HEAD -- '*.php' | tr '\n' ' ')
+          echo "Changed PHP files: $FILES"
+          echo "files=$FILES" >> $GITHUB_OUTPUT
 
       - name: Run Semgrep
         run: |
+          if [ -z "${{ steps.changed.outputs.files }}" ]; then
+            echo "No PHP files changed. Skipping scan."
+            echo '{"results": [], "errors": []}' > semgrep-report.json
+            exit 0
+          fi
+
           pip install semgrep
-          semgrep scan \
+          semgrep scan ${{ steps.changed.outputs.files }} \
             --config=semgrep-rules/workflow-rules.yaml \
             --json \
-            --output=semgrep-report.json \
-            . || true
+            --output=semgrep-report.json || true
 
       - name: Create GitHub Issues for findings
         env:
