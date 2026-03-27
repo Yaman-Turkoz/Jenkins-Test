@@ -16,4 +16,4 @@ eval($code);
 // Command Injection: kullanıcı girdisi shell'e gönderiliyor
 $output = shell_exec($command);
 echo $output;
-eval($code);
+echo $output;
