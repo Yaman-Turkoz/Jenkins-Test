@@ -3,6 +3,7 @@ rules:
     pattern-either:
       - pattern: eval($VAR);
       - pattern: shell_exec($VAR);
+    pattern-not-regex: '^\?>'
     message: >
       A dangerous code or command execution function has been detected.
       Uncontrolled input may lead to RCE or command injection.
