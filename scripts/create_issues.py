@@ -57,20 +57,6 @@ for rule_id, findings in groups.items():
         print(f"All findings for '{rule_id}' were false positives. Skipping issue.")
         continue
 
-    # Check for duplicate open issue
-    check = subprocess.run([
-        "gh", "issue", "list",
-        "--repo", repo,
-        "--state", "open",
-        "--label", "security",
-        "--json", "number,title",
-        "--jq", f'.[] | select(.title == "{title}") | .number'
-    ], capture_output=True, text=True, env=env)
-
-    if check.stdout.strip():
-        print(f"Open issue already exists, skipping: {title}")
-        continue
-
     message = findings[0]['extra']['message']
 
     body = f"""## Security Finding
