@@ -42,6 +42,9 @@ jobs:
             --json \
             --output=semgrep-report.json || true
 
+      - name: Filter findings to changed lines only
+        run: python3 scripts/filter_findings.py
+
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
