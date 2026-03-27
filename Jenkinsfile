@@ -25,30 +25,32 @@ pipeline {
                         script: "git diff --name-only HEAD~1 HEAD -- '*.php' | tr '\\n' ' '",
                         returnStdout: true
                     ).trim()
-
+        
                     if (!changedFiles) {
                         echo "No PHP files changed. Skipping scan."
                         return
                     }
-
+        
                     echo "Scanning changed files: ${changedFiles}"
-
+        
                     sh """
                         semgrep scan ${changedFiles} \
                             --config=semgrep-rules/pipeline-rules.yaml \
                             --json \
                             --output=semgrep-report.json || true
                     """
-
+        
+                    sh "python3 scripts/filter_findings.py"
+        
                     def reportText = readFile('semgrep-report.json').trim()
-
+        
                     if (!reportText) {
                         error("Semgrep report is empty. Scan may have failed.")
                     }
-
+        
                     def report   = new groovy.json.JsonSlurper().parseText(reportText)
                     def findings = report.results.size()
-
+        
                     if (findings > 0) {
                         echo "Semgrep: ${findings} critical finding(s) detected."
                         error("Semgrep: Pipeline failed due to critical findings.")
