@@ -1,12 +1,69 @@
 rules:
+
   - id: xss-and-debug
-    pattern-either:
-      - pattern: echo $VAR;
-      - pattern: var_dump($VAR);
-    pattern-not-regex: '^\?>'
-    message: >
-      User-supplied data is being directly output or a debug function
-      has been detected in production code. This may lead to XSS
-      vulnerabilities or sensitive data leakage.
+    mode: taint
     languages: [php]
     severity: WARNING
+    message: >
+      XSS vulnerability detected: user-controlled data ($SINK) reaches an unsafe sink
+      without being sanitized. This can lead to a Cross-Site Scripting (XSS) attack.
+
+    pattern-sources:
+
+      - pattern: $_GET[...]
+      - pattern: $_POST[...]
+      - pattern: $_REQUEST[...]
+      - pattern: $_COOKIE[...]
+      - pattern: $_FILES[...]
+
+      - pattern: $_SERVER['HTTP_REFERER']
+      - pattern: $_SERVER['HTTP_USER_AGENT']
+      - pattern: $_SERVER['HTTP_HOST']
+      - pattern: $_SERVER['HTTP_X_FORWARDED_FOR']
+      - pattern: $_SERVER['HTTP_X_FORWARDED_HOST']
+      - pattern: $_SERVER['HTTP_X_REAL_IP']
+      - pattern: $_SERVER['QUERY_STRING']
+      - pattern: $_SERVER['REQUEST_URI']
+      - pattern: $_SERVER['PHP_SELF']
+      - pattern: $_SERVER['PATH_INFO']
+      - pattern: $_SERVER['PATH_TRANSLATED']
+      - pattern: $_SERVER['ORIG_PATH_INFO']
+
+    pattern-sanitizers:
+
+      - pattern: htmlspecialchars(...)
+      - pattern: htmlentities(...)
+
+      - pattern: intval(...)
+      - pattern: floatval(...)
+      - pattern: number_format(...)
+      - pattern: abs(...)
+      - pattern: ceil(...)
+      - pattern: floor(...)
+      - pattern: round(...)
+
+      - pattern: (int) $X
+      - pattern: (float) $X
+      - pattern: (bool) $X
+
+    pattern-sinks:
+
+      - pattern: echo $SINK;
+      - pattern: echo($SINK);
+      - pattern: print $SINK;
+      - pattern: print($SINK);
+
+      - pattern: printf($SINK, ...);
+      - pattern: printf(..., $SINK);
+      - pattern: fprintf(..., $SINK, ...);
+      - pattern: vprintf($SINK, ...);
+
+      - pattern: die($SINK);
+      - pattern: exit($SINK);
+
+      - pattern: var_dump($SINK);
+      - pattern: var_dump($SINK, ...);
+      - pattern: print_r($SINK);
+
+      - pattern: fputs(..., $SINK)
+      - pattern: fwrite(..., $SINK)
