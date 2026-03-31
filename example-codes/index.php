@@ -20,3 +20,6 @@ echo $output;
 echo $output;
 
 echo $name;
+
+$name = htmlspecialchars($name);
+echo $name;
