@@ -67,3 +67,56 @@ rules:
 
       - pattern: fputs(..., $SINK)
       - pattern: fwrite(..., $SINK)
+
+
+
+  - id: ssrf-taint
+    mode: taint
+    languages: [php]
+    severity: WARNING
+    message: >
+      SSRF vulnerability detected: user-controlled data ($SINK) reaches a network
+      or file-fetching function without validation. An attacker can force the server
+      to make requests to internal services or arbitrary external hosts.
+    pattern-sources:
+      - pattern: $_GET[...]
+      - pattern: $_POST[...]
+      - pattern: $_REQUEST[...]
+      - pattern: $_COOKIE[...]
+
+      - pattern: $_SERVER['REQUEST_URI']
+
+    pattern-sinks:
+  
+      - pattern: curl_init($SINK)
+      - pattern: curl_setopt($CH, CURLOPT_URL, $SINK)
+      - pattern: curl_setopt($CH, CURLOPT_PROXY, $SINK)
+      - pattern: curl_setopt_array($CH, [..., CURLOPT_URL => $SINK, ...])
+
+      - pattern: file_get_contents($SINK, ...)
+      - pattern: fopen($SINK, ...)
+      - pattern: file($SINK, ...)
+      - pattern: readfile($SINK, ...)
+
+      - pattern: fsockopen($SINK, ...)
+      - pattern: pfsockopen($SINK, ...)
+      - pattern: stream_socket_client($SINK, ...)
+
+      - pattern: get_headers($SINK, ...)
+      - pattern: getimagesize($SINK, ...)
+
+      - pattern: simplexml_load_file($SINK, ...)
+      - pattern: $DOM->load($SINK)
+      - pattern: $DOM->loadHTMLFile($SINK)
+
+      - pattern: new SoapClient($SINK)
+      - pattern: new SoapClient($SINK, ...)
+
+      - pattern: new GuzzleHttp\Client(...)
+      - pattern: $CLIENT->get($SINK)
+      - pattern: $CLIENT->post($SINK, ...)
+      - pattern: $CLIENT->request(..., $SINK, ...)
+
+      - pattern: ldap_connect($SINK)
+      - pattern: ldap_connect($SINK, ...)
+
