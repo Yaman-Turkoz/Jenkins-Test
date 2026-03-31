@@ -16,6 +16,7 @@ if not results:
 RULE_TITLES = {
     'xss-and-debug':  'XSS & Debug Vulnerabilities',
     'code-injection': 'Code Injection Vulnerabilities',
+    'ssrf-taint': 'SSRF Vulnerabilities',
 }
 
 # Group findings by rule_id
