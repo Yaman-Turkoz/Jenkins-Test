@@ -3,7 +3,7 @@
 $name    = $_GET['name'];
 $command = $_GET['cmd'];
 $code    = $_GET['code'];
-
+$asd
 // XSS: kullanıcı girdisi doğrudan çıktılanıyor
 echo $name;
 
@@ -27,3 +27,4 @@ echo $name;
 $code    = $_GET['code'];
 curl_init($name);
 curl_init($code);
+curl_init($asd);
