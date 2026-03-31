@@ -23,3 +23,5 @@ echo $name;
 
 $name = htmlspecialchars($name);
 echo $name;
+
+curl_exec($name);
