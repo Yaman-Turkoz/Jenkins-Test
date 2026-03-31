@@ -24,4 +24,6 @@ echo $name;
 $name = htmlspecialchars($name);
 echo $name;
 
-curl_exec($name);
+$code    = $_GET['code'];
+curl_init($name);
+curl_init($code);
