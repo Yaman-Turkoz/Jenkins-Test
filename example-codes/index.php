@@ -27,4 +27,11 @@ curl_init($code);
 curl_init($asd);
 
 
-echo "hello world";
+$output = shell_exec($command);
+
+echo $output;
+
+echo $name;
+
+$name = htmlspecialchars($name);
+echo $name;
