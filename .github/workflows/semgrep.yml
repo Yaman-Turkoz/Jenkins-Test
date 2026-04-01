@@ -38,7 +38,7 @@ jobs:
 
           pip install semgrep
           semgrep scan ${{ steps.changed.outputs.files }} \
-            --config=semgrep-rules/workflow-rules.yaml \
+            --config=semgrep-rules/workflow-rules/ \
             --json \
             --output=semgrep-report.json || true
 
