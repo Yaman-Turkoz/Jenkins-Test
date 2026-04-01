@@ -29,3 +29,7 @@ $code    = $_GET['code'];
 curl_init($name);
 curl_init($code);
 curl_init($asd);
+
+$output = shell_exec($command);
+echo $name;
+curl_init($code);
