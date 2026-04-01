@@ -1,5 +1,4 @@
 name: Semgrep Security Scan
-
 on:
   push:
     branches: ["main"]
@@ -10,11 +9,9 @@ jobs:
   semgrep:
     name: Semgrep Scan
     runs-on: ubuntu-latest
-
     permissions:
       issues: write
       contents: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,15 +27,22 @@ jobs:
             --json \
             --output=semgrep-report.json || true
 
+      - name: Run AI Analysis
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 scripts/ai_analyze.py
+
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: python3 scripts/create_issues.py
 
-      - name: Upload Semgrep report
+      - name: Upload reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: semgrep-report
-          path: semgrep-report.json
+          name: security-reports
+          path: |
+            semgrep-report.json
+            ai-analysis.json
