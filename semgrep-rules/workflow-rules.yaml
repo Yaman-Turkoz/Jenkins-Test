@@ -16,35 +16,13 @@ rules:
       - pattern: $_COOKIE[...]
       - pattern: $_FILES[...]
 
-      - pattern: $_SERVER['HTTP_REFERER']
-      - pattern: $_SERVER['HTTP_USER_AGENT']
-      - pattern: $_SERVER['HTTP_HOST']
-      - pattern: $_SERVER['HTTP_X_FORWARDED_FOR']
-      - pattern: $_SERVER['HTTP_X_FORWARDED_HOST']
-      - pattern: $_SERVER['HTTP_X_REAL_IP']
-      - pattern: $_SERVER['QUERY_STRING']
-      - pattern: $_SERVER['REQUEST_URI']
-      - pattern: $_SERVER['PHP_SELF']
-      - pattern: $_SERVER['PATH_INFO']
-      - pattern: $_SERVER['PATH_TRANSLATED']
-      - pattern: $_SERVER['ORIG_PATH_INFO']
 
     pattern-sanitizers:
-
+    
       - pattern: htmlspecialchars(...)
       - pattern: htmlentities(...)
+      - pattern: json_encode(...)
 
-      - pattern: intval(...)
-      - pattern: floatval(...)
-      - pattern: number_format(...)
-      - pattern: abs(...)
-      - pattern: ceil(...)
-      - pattern: floor(...)
-      - pattern: round(...)
-
-      - pattern: (int) $X
-      - pattern: (float) $X
-      - pattern: (bool) $X
 
     pattern-sinks:
 
@@ -84,7 +62,6 @@ rules:
       - pattern: $_REQUEST[...]
       - pattern: $_COOKIE[...]
 
-      - pattern: $_SERVER['REQUEST_URI']
 
     pattern-sinks:
   
@@ -105,18 +82,4 @@ rules:
       - pattern: get_headers($SINK, ...)
       - pattern: getimagesize($SINK, ...)
 
-      - pattern: simplexml_load_file($SINK, ...)
-      - pattern: $DOM->load($SINK)
-      - pattern: $DOM->loadHTMLFile($SINK)
-
-      - pattern: new SoapClient($SINK)
-      - pattern: new SoapClient($SINK, ...)
-
-      - pattern: new GuzzleHttp\Client(...)
-      - pattern: $CLIENT->get($SINK)
-      - pattern: $CLIENT->post($SINK, ...)
-      - pattern: $CLIENT->request(..., $SINK, ...)
-
-      - pattern: ldap_connect($SINK)
-      - pattern: ldap_connect($SINK, ...)
 
