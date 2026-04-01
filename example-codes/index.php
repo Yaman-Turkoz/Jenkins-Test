@@ -35,3 +35,6 @@ echo $name;
 
 $name = htmlspecialchars($name);
 echo $name;
+
+echo "hello";
+
