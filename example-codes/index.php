@@ -13,7 +13,7 @@ var_dump($name);
 eval($code);
 
 
-$output = shell_exec($command);
+$output = shell_exec($asd);
 
 echo $output;
 
