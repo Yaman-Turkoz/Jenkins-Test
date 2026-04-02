@@ -5,29 +5,32 @@ import sys
 import urllib.request
 import urllib.error
 
-# ── Sabitler ──────────────────────────────────────────────────────────────────
+# ── Constants ────────────────────────────────────────────────────────────────
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-SEMGREP_REPORT = "semgrep-report.json"
-AI_OUTPUT      = "ai-analysis.json"
 
-# ── 1. Semgrep raporunu oku ───────────────────────────────────────────────────
+SEMGREP_REPORT = "semgrep-report.json"
+AI_OUTPUT = "ai-analysis.json"
+
+# ── 1. Load Semgrep Report ───────────────────────────────────────────────────
+
 def load_semgrep_report():
     with open(SEMGREP_REPORT) as f:
         data = json.load(f)
     return data.get("results", [])
 
-# ── 2. Son commit'te değişen dosyaları bul ────────────────────────────────────
+# ── 2. Get Changed Files ─────────────────────────────────────────────────────
+
 def get_changed_files():
     result = subprocess.run(
         ["git", "diff", "HEAD~1", "HEAD", "--name-only"],
         capture_output=True, text=True
     )
-    files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    return files
+    return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
-# ── 3. Dosya içeriklerini oku ─────────────────────────────────────────────────
+# ── 3. Read File Contents (FULL CONTEXT for taint analysis) ──────────────────
+
 def read_file_contents(file_paths):
     contents = {}
     for path in file_paths:
@@ -36,85 +39,140 @@ def read_file_contents(file_paths):
                 with open(path) as f:
                     contents[path] = f.read()
             except Exception as e:
-                contents[path] = f"(okunamadı: {e})"
+                contents[path] = f"(error reading file: {e})"
         else:
-            contents[path] = "(dosya bulunamadı)"
+            contents[path] = "(file not found)"
     return contents
 
-# ── 4. Gemini'ye gönderilecek prompt'u oluştur ───────────────────────────────
-def build_prompt(semgrep_findings, changed_files, file_contents):
-    diff_result = subprocess.run(
-        ["git", "diff", "HEAD~1", "HEAD"],
+# ── 4. Extract Added Lines WITH Exact File + Line Mapping ────────────────────
+
+def extract_added_lines_with_mapping():
+    result = subprocess.run(
+        ["git", "diff", "--unified=0", "HEAD~1", "HEAD"],
         capture_output=True, text=True
     )
-    diff_text = diff_result.stdout or "(diff alınamadı)"
 
-    # Semgrep'in bulduklarını detaylı listele
-    semgrep_already_found = ""
-    if semgrep_findings:
-        for f in semgrep_findings:
-            rule = f.get("check_id", "").split(".")[-1]
-            path = f.get("path", "")
-            line = f.get("start", {}).get("line", "?")
-            semgrep_already_found += f"  - Rule: {rule}, File: {path}, Line: {line}\n"
-    else:
-        semgrep_already_found = "  (none)\n"
+    diff = result.stdout
+    added_lines = []
 
-    prompt = f"""You are a security code reviewer. Your ONLY job is to find security vulnerabilities that Semgrep MISSED.
+    current_file = None
+    new_line_num = 0
 
-## STRICT RULES
-1. Look ONLY at lines starting with "+" in the git diff below (these are added lines).
-2. Do NOT report any finding that is already in the "Semgrep Already Found" list below.
-3. Do NOT report LOW severity issues — only HIGH or MEDIUM.
-4. Do NOT hallucinate: only report a finding if you can point to an exact "+" line in the diff.
-5. The "file" and "line" fields must exactly match a real added line in the diff.
-6. If you find nothing new, return an empty additional_findings list — that is a valid and correct answer.
+    for line in diff.splitlines():
+        if line.startswith("+++ b/"):
+            current_file = line[6:]
+        elif line.startswith("@@"):
+            parts = line.split(" ")
+            new_part = [p for p in parts if p.startswith("+")][0]
+            new_line_num = int(new_part.split(",")[0][1:])
+        elif line.startswith("+") and not line.startswith("+++"):
+            added_lines.append({
+                "file": current_file,
+                "line": new_line_num,
+                "code": line[1:]
+            })
+            new_line_num += 1
 
-## Git Diff (ONLY lines starting with "+" are new code)
-```diff
-{diff_text[:6000]}
-```
+    return added_lines
 
-## Semgrep Already Found — DO NOT repeat these:
-{semgrep_already_found}
+# ── 5. Build Prompt ─────────────────────────────────────────────────────────
 
-## Required JSON Output — return ONLY this JSON, no extra text, no markdown:
+def build_prompt(semgrep_findings, added_lines, file_contents):
+
+    semgrep_list = []
+    for f in semgrep_findings:
+        semgrep_list.append({
+            "file": f.get("path"),
+            "line": f.get("start", {}).get("line"),
+            "rule": f.get("check_id", "")
+        })
+
+    prompt = f"""
+You are a strict security analyzer.
+
+Your task is to find vulnerabilities that Semgrep MISSED.
+
+────────────────────────────────────────
+CONTEXT (for taint analysis ONLY)
+────────────────────────────────────────
+{json.dumps(file_contents, indent=2)[:12000]}
+
+────────────────────────────────────────
+ADDED LINES (ONLY THESE CAN BE REPORTED)
+────────────────────────────────────────
+{json.dumps(added_lines, indent=2)}
+
+────────────────────────────────────────
+SEMGREP FINDINGS (DO NOT DUPLICATE)
+────────────────────────────────────────
+{json.dumps(semgrep_list, indent=2)}
+
+────────────────────────────────────────
+STRICT RULES (MUST FOLLOW)
+────────────────────────────────────────
+
+1. You may analyze the FULL FILE CONTENT for taint/dataflow understanding.
+2. HOWEVER, you are ONLY allowed to report vulnerabilities that exist EXACTLY on the "added_lines".
+3. The "file" and "line" MUST match EXACTLY one entry from added_lines.
+4. If it is not in added_lines → DO NOT report it.
+
+5. A variable is considered USER-CONTROLLED ONLY IF:
+   - It directly uses: $_GET, $_POST, $_REQUEST, $_COOKIE, $_FILES
+   - OR is directly assigned from them in the SAME added_lines
+   - OTHERWISE → treat it as SAFE
+
+6. NEVER assume "could be vulnerable" or "potentially vulnerable".
+7. ONLY report if vulnerability is CERTAIN based on the code.
+8. If unsure → DO NOT REPORT.
+
+9. If (file + line) already exists in Semgrep findings → DO NOT REPORT.
+
+10. DO NOT hallucinate variables, flows, or sources.
+
+11. If no valid findings → return empty list.
+
+────────────────────────────────────────
+OUTPUT FORMAT (STRICT JSON ONLY)
+────────────────────────────────────────
+
 {{
   "open_issue": false,
-  "summary": "one sentence describing what you found or why you found nothing",
-  "semgrep_findings": [],
+  "summary": "short explanation",
   "additional_findings": [
     {{
       "title": "short vulnerability title",
       "file": "exact/file/path.php",
       "line": 42,
       "severity": "HIGH or MEDIUM",
-      "description": "what the vulnerability is, referencing the exact added line"
+      "description": "clear explanation referencing the exact added line"
     }}
   ]
 }}
 """
     return prompt
 
-# ── 5. Gemini API'ye istek at ─────────────────────────────────────────────────
+# ── 6. Call Groq API ────────────────────────────────────────────────────────
+
 def call_groq(prompt):
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
+        "temperature": 0,
         "max_tokens": 2048
     }
+
     body = json.dumps(payload).encode("utf-8")
+
     req = urllib.request.Request(
         GROQ_URL,
         data=body,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "python-urllib/3.11"
+            "Authorization": f"Bearer {GROQ_API_KEY}"
         },
         method="POST"
     )
+
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             raw = json.loads(resp.read().decode("utf-8"))
@@ -123,65 +181,108 @@ def call_groq(prompt):
         print(e.read().decode())
         sys.exit(1)
 
-    try:
-        text = raw["choices"][0]["message"]["content"]
-    except (KeyError, IndexError):
-        print("Groq cevabı parse edilemedi:", raw)
-        sys.exit(1)
+    return raw["choices"][0]["message"]["content"]
 
-    return text
+# ── 7. Parse Response ───────────────────────────────────────────────────────
 
-# ── 6. Gemini'nin JSON cevabını parse et ─────────────────────────────────────
-def parse_groq_response(text):
-    # Bazen Gemini ```json ... ``` ile sarar, temizle
+def parse_response(text):
     text = text.strip()
+
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1])
+
     try:
         return json.loads(text)
-    except json.JSONDecodeError as e:
-        print("Groq JSON parse hatası:", e)
-        print("Ham cevap:", text)
+    except json.JSONDecodeError:
+        print("Failed to parse AI response:")
+        print(text)
         sys.exit(1)
 
-# ── Ana akış ──────────────────────────────────────────────────────────────────
+# ── 8. Post-filter (CRITICAL SAFETY) ────────────────────────────────────────
+
+def filter_results(ai_findings, added_lines, semgrep_findings):
+    valid = []
+
+    semgrep_pairs = {
+        (f.get("path"), f.get("start", {}).get("line"))
+        for f in semgrep_findings
+    }
+
+    allowed_pairs = {
+        (l["file"], l["line"])
+        for l in added_lines
+    }
+
+    for f in ai_findings:
+        pair = (f.get("file"), f.get("line"))
+
+        if pair not in allowed_pairs:
+            continue
+
+        if pair in semgrep_pairs:
+            continue
+
+        valid.append(f)
+
+    return valid
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
 def main():
-    # main() fonksiyonunun en başına ekle
-    print(f"GROQ_API_KEY var mı: {'Evet' if GROQ_API_KEY else 'HAYIR - BOŞ!'}")
-    print(f"Key başlangıcı: {GROQ_API_KEY[:8] if GROQ_API_KEY else 'YOK'}")
-    
     if not GROQ_API_KEY:
-        print("GROQ_API_KEY bulunamadı!")
+        print("GROQ_API_KEY missing!")
         sys.exit(1)
 
-    print("📂 Semgrep raporu okunuyor...")
-    findings = load_semgrep_report()
-    print(f"   → {len(findings)} semgrep bulgusu bulundu.")
+    print("Loading Semgrep results...")
+    semgrep_findings = load_semgrep_report()
 
-    print("📝 Değişen dosyalar tespit ediliyor...")
+    print("Detecting changed files...")
     changed_files = get_changed_files()
-    print(f"   → Değişen dosyalar: {changed_files}")
 
-    print("📖 Dosya içerikleri okunuyor...")
+    print("Reading file contents...")
     file_contents = read_file_contents(changed_files)
 
-    print("🤖 Groq'a gönderiliyor...")
-    prompt = build_prompt(findings, changed_files, file_contents)
-    raw_response = call_groq(prompt)
+    print("Extracting added lines...")
+    added_lines = extract_added_lines_with_mapping()
 
-    print("📊 Groq cevabı parse ediliyor...")
-    analysis = parse_groq_response(raw_response)
+    if not added_lines:
+        print("No added lines → skipping AI analysis.")
+        with open(AI_OUTPUT, "w") as f:
+            json.dump({
+                "open_issue": False,
+                "summary": "No changes to analyze",
+                "additional_findings": []
+            }, f, indent=2)
+        return
 
-    # Kaydet
+    print("Building prompt...")
+    prompt = build_prompt(semgrep_findings, added_lines, file_contents)
+
+    print("Calling AI...")
+    raw = call_groq(prompt)
+
+    print("Parsing response...")
+    parsed = parse_response(raw)
+
+    print("Filtering results...")
+    filtered = filter_results(
+        parsed.get("additional_findings", []),
+        added_lines,
+        semgrep_findings
+    )
+
+    final_output = {
+        "open_issue": len(filtered) > 0,
+        "summary": parsed.get("summary", ""),
+        "additional_findings": filtered
+    }
+
     with open(AI_OUTPUT, "w") as f:
-        json.dump(analysis, f, indent=2, ensure_ascii=False)
+        json.dump(final_output, f, indent=2, ensure_ascii=False)
 
-    print(f"\n✅ AI analizi tamamlandı → {AI_OUTPUT}")
-    print(f"   open_issue : {analysis.get('open_issue')}")
-    print(f"   summary    : {analysis.get('summary')}")
-    print(f"   semgrep onaylı: {sum(1 for x in analysis.get('semgrep_findings',[]) if x.get('confirmed'))}")
-    print(f"   ek bulgular   : {len(analysis.get('additional_findings', []))}")
+    print(f"Done → {AI_OUTPUT}")
+    print(f"Findings: {len(filtered)}")
 
 if __name__ == "__main__":
     main()
