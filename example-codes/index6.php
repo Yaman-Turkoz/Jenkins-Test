@@ -13,3 +13,5 @@ echo $code;
 curl_init($name2);
 curl_init($code);
 curl_init($asd);
+
+echo $code;
