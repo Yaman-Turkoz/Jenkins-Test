@@ -147,7 +147,7 @@ def call_groq(prompt):
     return text
 
 # ── 6. Gemini'nin JSON cevabını parse et ─────────────────────────────────────
-def parse_gemini_response(text):
+def parse_groq_response(text):
     # Bazen Gemini ```json ... ``` ile sarar, temizle
     text = text.strip()
     if text.startswith("```"):
@@ -156,7 +156,7 @@ def parse_gemini_response(text):
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        print("Gemini JSON parse hatası:", e)
+        print("Groq JSON parse hatası:", e)
         print("Ham cevap:", text)
         sys.exit(1)
 
@@ -177,12 +177,12 @@ def main():
     print("📖 Dosya içerikleri okunuyor...")
     file_contents = read_file_contents(changed_files)
 
-    print("🤖 Gemini'ye gönderiliyor...")
+    print("🤖 Groq'a gönderiliyor...")
     prompt = build_prompt(findings, changed_files, file_contents)
     raw_response = call_groq(prompt)
 
-    print("📊 Gemini cevabı parse ediliyor...")
-    analysis = parse_gemini_response(raw_response)
+    print("📊 Groq cevabı parse ediliyor...")
+    analysis = parse_groq_response(raw_response)
 
     # Kaydet
     with open(AI_OUTPUT, "w") as f:
