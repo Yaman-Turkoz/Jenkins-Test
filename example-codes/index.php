@@ -26,15 +26,6 @@ curl_init($name);
 curl_init($code);
 curl_init($asd);
 
-
-$output = shell_exec($command);
-
+echo $name;
 echo $output;
-
-echo $name;
-
-$name = htmlspecialchars($name);
-echo $name;
-
-echo "hello";
-
+curl_init($code);
