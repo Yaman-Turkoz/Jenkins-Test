@@ -15,4 +15,3 @@ curl_init($code);
 curl_init($asd);
 
 echo $code;
-
