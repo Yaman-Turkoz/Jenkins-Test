@@ -12,6 +12,9 @@ var_dump($name);
 
 eval($code);
 
+echo $name;
+echo $output;
+curl_init($code);
 
 $output = shell_exec($command);
 
