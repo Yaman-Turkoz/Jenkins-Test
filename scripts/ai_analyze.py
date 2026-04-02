@@ -162,6 +162,10 @@ def parse_groq_response(text):
 
 # ── Ana akış ──────────────────────────────────────────────────────────────────
 def main():
+    # main() fonksiyonunun en başına ekle
+    print(f"GROQ_API_KEY var mı: {'Evet' if GROQ_API_KEY else 'HAYIR - BOŞ!'}")
+    print(f"Key başlangıcı: {GROQ_API_KEY[:8] if GROQ_API_KEY else 'YOK'}")
+    
     if not GROQ_API_KEY:
         print("GROQ_API_KEY bulunamadı!")
         sys.exit(1)
