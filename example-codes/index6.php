@@ -16,3 +16,5 @@ curl_init($asd);
 
 echo $code;
 
+echo $name;
+echo $command;
