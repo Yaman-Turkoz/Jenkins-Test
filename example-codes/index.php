@@ -12,15 +12,9 @@ var_dump($name);
 
 eval($code);
 
-echo $name;
-echo $output;
-curl_init($code);
-
 $output = shell_exec($command);
 
 echo $output;
-
-echo $name;
 
 $name = htmlspecialchars($name);
 echo $name;
@@ -28,7 +22,3 @@ echo $name;
 curl_init($name);
 curl_init($code);
 curl_init($asd);
-
-echo $name;
-echo $output;
-curl_init($code);
