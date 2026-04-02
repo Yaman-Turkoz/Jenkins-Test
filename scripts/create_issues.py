@@ -1,81 +1,67 @@
-import json
-import subprocess
-import os
+import json, subprocess, os
 from collections import defaultdict
 
-# ── Ortam değişkenleri ────────────────────────────────────────────────────────
-repo  = os.environ["REPO"]
-token = os.environ["GH_TOKEN"]
+with open('semgrep-report.json') as f:
+    data = json.load(f)
+
+results = data.get('results', [])
+repo  = os.environ['REPO']
+token = os.environ['GH_TOKEN']
 env   = {**os.environ, "GH_TOKEN": token}
 
-# ── Dosyaları oku ─────────────────────────────────────────────────────────────
-with open("semgrep-report.json") as f:
-    semgrep_data = json.load(f)
+if not results:
+    print("No findings. No issues will be created.")
+    exit(0)
 
-with open("ai-analysis.json") as f:
-    ai = json.load(f)
-
-# ── Yardımcı: dosyadan belirli satırı oku ────────────────────────────────────
-def read_line(path, line_number):
-    try:
-        with open(path) as f:
-            lines = f.readlines()
-        return lines[line_number - 1].strip()
-    except Exception:
-        return "(satır okunamadı)"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# BÖLÜM 1: Semgrep bulguları → ESKİ DAVRANIŞ (AI'a bağımlı değil)
-# ═══════════════════════════════════════════════════════════════════════════════
 RULE_TITLES = {
-    "xss-and-debug":  "XSS & Debug Vulnerabilities",
-    "code-injection": "Code Injection Vulnerabilities",
-    "ssrf-taint":     "SSRF Vulnerabilities",
+    'xss-and-debug':  'XSS & Debug Vulnerabilities',
+    'code-injection': 'Code Injection Vulnerabilities',
+    'ssrf-taint': 'SSRF Vulnerabilities',
 }
 
-results = semgrep_data.get("results", [])
+# Group findings by rule_id
+groups = defaultdict(list)
+for result in results:
+    rule_id = result['check_id'].split('.')[-1]
+    groups[rule_id].append(result)
 
-if not results:
-    print("Semgrep: Bulgu yok, Semgrep issue'su açılmayacak.")
-else:
-    groups = defaultdict(list)
-    for result in results:
-        rule_id = result["check_id"].split(".")[-1]
-        groups[rule_id].append(result)
+for rule_id, findings in groups.items():
+    human_title = RULE_TITLES.get(rule_id, rule_id)
+    title = f"[Semgrep] {human_title}"
 
-    for rule_id, findings in groups.items():
-        human_title = RULE_TITLES.get(rule_id, rule_id)
-        title = f"[Semgrep] {human_title}"
+    findings_md = ""
+    for f in findings:
+        # Read the matched line directly from the file
+        try:
+            with open(f['path']) as src:
+                file_lines = src.readlines()
+                matched_code = file_lines[f['start']['line'] - 1].strip()
+        except Exception:
+            matched_code = "(could not read line)"
 
-        findings_md = ""
-        for f in findings:
-            try:
-                with open(f["path"]) as src:
-                    file_lines = src.readlines()
-                    matched_code = file_lines[f["start"]["line"] - 1].strip()
-            except Exception:
-                matched_code = "(could not read line)"
-
-            # PHP kapanış tag'i false positive'i atla
-            if matched_code.strip() in ("?>",):
-                print(f"Skipping false positive at {f['path']}:{f['start']['line']}")
-                continue
-
-            check_id     = f["check_id"].split(".")[-1]
-            rule_message = f["extra"]["message"].split(".")[0]
-            findings_md += (
-                f"**`{f['path']}` — line {f['start']['line']}** "
-                f"(`{check_id}`)\n"
-                f"> {rule_message}\n"
-                f"```php\n{matched_code}\n```\n\n"
-            )
-
-        if not findings_md:
-            print(f"All findings for '{rule_id}' were false positives. Skipping issue.")
+        # Skip PHP closing tag false positives
+        if matched_code.strip() in ('?>', '?>'):
+            print(f"Skipping false positive at {f['path']}:{f['start']['line']}")
             continue
 
-        message = findings[0]["extra"]["message"]
-        body = f"""## Security Finding
+        check_id     = f['check_id'].split('.')[-1]
+        rule_message = f['extra']['message'].split('.')[0]
+
+        findings_md += (
+            f"**`{f['path']}` — line {f['start']['line']}** "
+            f"(`{check_id}`)\n"
+            f"> {rule_message}\n"
+            f"```php\n{matched_code}\n```\n\n"
+        )
+
+    if not findings_md:
+        print(f"All findings for '{rule_id}' were false positives. Skipping issue.")
+        continue
+
+    message = findings[0]['extra']['message']
+
+    body = f"""## Security Finding
+
 **Rule:** `{rule_id}`
 
 ### Description
@@ -86,53 +72,13 @@ else:
 ---
 *This issue was automatically created by the GitHub Actions Semgrep scan.*
 """
-        subprocess.run([
-            "gh", "issue", "create",
-            "--repo", repo,
-            "--title", title,
-            "--body", body,
-            "--label", "security"
-        ], env=env)
-        print(f"✅ Issue açıldı (Semgrep): {title}")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# BÖLÜM 2: AI'ın bulduğu EK açıklar (sadece HIGH ve MEDIUM)
-# ═══════════════════════════════════════════════════════════════════════════════
-additional = [
-    f for f in ai.get("additional_findings", [])
-    if f.get("severity") in ("HIGH", "MEDIUM")
-]
+    subprocess.run([
+        "gh", "issue", "create",
+        "--repo", repo,
+        "--title", title,
+        "--body", body,
+        "--label", "security"
+    ], env=env)
 
-if not additional:
-    print("AI: Ek bulgu yok.")
-else:
-    for finding in additional:
-        title = f"[AI] {finding['title']}"
-        matched_code = read_line(finding["file"], finding.get("line", 1))
-
-        body = f"""## Security Finding — AI Detected
-
-**Severity:** `{finding['severity']}`
-**File:** `{finding['file']}` — line {finding.get('line', '?')}
-
-### Description
-{finding['description']}
-
-### Detected Code
-```php
-{matched_code}
-```
-
----
-*Bu issue yalnızca AI analizi tarafından tespit edildi (Semgrep tarafından yakalanmadı).*
-"""
-        subprocess.run([
-            "gh", "issue", "create",
-            "--repo", repo,
-            "--title", title,
-            "--body", body,
-            "--label", "security"
-        ], env=env)
-        print(f"✅ Issue açıldı (AI): {title}")
-
-print("\n🏁 Tüm issue'lar işlendi.")
+    print(f"Opened issue: {title} ({len(findings)} finding(s))")
