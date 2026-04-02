@@ -49,40 +49,50 @@ def build_prompt(semgrep_findings, changed_files, file_contents):
     )
     diff_text = diff_result.stdout or "(diff alınamadı)"
 
+    # Semgrep'in bulduklarını detaylı listele
+    semgrep_already_found = ""
+    if semgrep_findings:
+        for f in semgrep_findings:
+            rule = f.get("check_id", "").split(".")[-1]
+            path = f.get("path", "")
+            line = f.get("start", {}).get("line", "?")
+            semgrep_already_found += f"  - Rule: {rule}, File: {path}, Line: {line}\n"
+    else:
+        semgrep_already_found = "  (none)\n"
+
     prompt = f"""You are a security code reviewer. Your ONLY job is to find security vulnerabilities that Semgrep MISSED.
 
 ## STRICT RULES
-- Analyze ONLY the lines added in the git diff (lines starting with "+")
-- Do NOT report anything about lines that were not changed
-- Do NOT report issues that Semgrep already found
-- Do NOT report LOW severity issues
-- If you find nothing extra, return an empty additional_findings list
+1. Look ONLY at lines starting with "+" in the git diff below (these are added lines).
+2. Do NOT report any finding that is already in the "Semgrep Already Found" list below.
+3. Do NOT report LOW severity issues — only HIGH or MEDIUM.
+4. Do NOT hallucinate: only report a finding if you can point to an exact "+" line in the diff.
+5. The "file" and "line" fields must exactly match a real added line in the diff.
+6. If you find nothing new, return an empty additional_findings list — that is a valid and correct answer.
 
-## Git Diff (ONLY added lines matter — lines starting with "+")
-```
+## Git Diff (ONLY lines starting with "+" are new code)
+```diff
 {diff_text[:6000]}
 ```
 
-## What Semgrep Already Found (do NOT repeat these)
-These rule IDs were already caught by Semgrep: {[f.get('check_id','') for f in semgrep_findings]}
+## Semgrep Already Found — DO NOT repeat these:
+{semgrep_already_found}
 
-## Required JSON Output — return ONLY this, no extra text:
+## Required JSON Output — return ONLY this JSON, no extra text, no markdown:
 {{
   "open_issue": false,
-  "summary": "one sentence",
+  "summary": "one sentence describing what you found or why you found nothing",
   "semgrep_findings": [],
   "additional_findings": [
     {{
       "title": "short vulnerability title",
-      "file": "path/to/file.php",
+      "file": "exact/file/path.php",
       "line": 42,
       "severity": "HIGH or MEDIUM",
-      "description": "what vulnerability and which added line caused it"
+      "description": "what the vulnerability is, referencing the exact added line"
     }}
   ]
 }}
-
-Note: "open_issue" must always be false — the issue decision is made elsewhere, not by you.
 """
     return prompt
 
