@@ -5,11 +5,11 @@ $command = $_GET['cmd'];
 $code    = $_GET['code'];
 $asd
 
-$name = htmlspecialchars($name);
+$name2 = htmlspecialchars($name);
 echo $name;
 echo $command;
 echo $code;
 
-curl_init($name);
+curl_init($name2);
 curl_init($code);
 curl_init($asd);
