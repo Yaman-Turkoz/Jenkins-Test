@@ -6,11 +6,9 @@ import urllib.request
 import urllib.error
 
 # ── Sabitler ──────────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY
-)
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 SEMGREP_REPORT = "semgrep-report.json"
 AI_OUTPUT      = "ai-analysis.json"
 
@@ -115,36 +113,35 @@ Rules:
     return prompt
 
 # ── 5. Gemini API'ye istek at ─────────────────────────────────────────────────
-def call_gemini(prompt):
+def call_groq(prompt):
     payload = {
-        "contents": [
-            {"parts": [{"text": prompt}]}
-        ],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 2048
-        }
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 2048
     }
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        GEMINI_URL,
+        GROQ_URL,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {GROQ_API_KEY}"
+        },
         method="POST"
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             raw = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        print(f"Gemini API error: {e.code} {e.reason}")
+        print(f"Groq API error: {e.code} {e.reason}")
         print(e.read().decode())
         sys.exit(1)
 
-    # Gemini cevabından text'i çıkar
     try:
-        text = raw["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError) as e:
-        print("Gemini cevabı parse edilemedi:", raw)
+        text = raw["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        print("Groq cevabı parse edilemedi:", raw)
         sys.exit(1)
 
     return text
@@ -165,8 +162,8 @@ def parse_gemini_response(text):
 
 # ── Ana akış ──────────────────────────────────────────────────────────────────
 def main():
-    if not GEMINI_API_KEY:
-        print("GEMINI_API_KEY bulunamadı!")
+    if not GROQ_API_KEY:
+        print("GROQ_API_KEY bulunamadı!")
         sys.exit(1)
 
     print("📂 Semgrep raporu okunuyor...")
@@ -182,7 +179,7 @@ def main():
 
     print("🤖 Gemini'ye gönderiliyor...")
     prompt = build_prompt(findings, changed_files, file_contents)
-    raw_response = call_gemini(prompt)
+    raw_response = call_groq(prompt)
 
     print("📊 Gemini cevabı parse ediliyor...")
     analysis = parse_gemini_response(raw_response)
