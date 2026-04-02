@@ -43,72 +43,46 @@ def read_file_contents(file_paths):
 
 # ── 4. Gemini'ye gönderilecek prompt'u oluştur ───────────────────────────────
 def build_prompt(semgrep_findings, changed_files, file_contents):
-    # Değişen dosyaların diff'ini de al (satır bazında ne değişti)
     diff_result = subprocess.run(
         ["git", "diff", "HEAD~1", "HEAD"],
         capture_output=True, text=True
     )
     diff_text = diff_result.stdout or "(diff alınamadı)"
 
-    semgrep_json = json.dumps(semgrep_findings, indent=2, ensure_ascii=False)
+    prompt = f"""You are a security code reviewer. Your ONLY job is to find security vulnerabilities that Semgrep MISSED.
 
-    files_section = ""
-    for path, content in file_contents.items():
-        files_section += f"\n\n### {path}\n```\n{content}\n```"
+## STRICT RULES
+- Analyze ONLY the lines added in the git diff (lines starting with "+")
+- Do NOT report anything about lines that were not changed
+- Do NOT report issues that Semgrep already found
+- Do NOT report LOW severity issues
+- If you find nothing extra, return an empty additional_findings list
 
-    prompt = f"""You are a security code reviewer. Analyze the following information and return ONLY a valid JSON object — no markdown, no explanation, no extra text.
-
-## Context
-The developer made changes in the last commit. Semgrep scanned only the changed parts (using --baseline-commit HEAD~1). Your job is the same: analyze ONLY whether the changes introduced in the last commit create security vulnerabilities. Do NOT report pre-existing issues in unchanged code.
-
-## Git Diff (what changed in the last commit)
+## Git Diff (ONLY added lines matter — lines starting with "+")
 ```
-{diff_text[:8000]}
+{diff_text[:6000]}
 ```
 
-## Semgrep Findings (JSON)
-```json
-{semgrep_json}
-```
+## What Semgrep Already Found (do NOT repeat these)
+These rule IDs were already caught by Semgrep: {[f.get('check_id','') for f in semgrep_findings]}
 
-## Changed Files (full content for context)
-{files_section[:12000]}
-
-## Your Tasks
-1. Validate each Semgrep finding: is it a real vulnerability or a false positive?
-2. Analyze the git diff yourself: did the changes introduce any additional vulnerabilities that Semgrep missed?
-3. Decide: should a GitHub issue be opened?
-
-## Required JSON Output Format
-Return ONLY this JSON structure:
+## Required JSON Output — return ONLY this, no extra text:
 {{
-  "open_issue": true or false,
-  "summary": "one sentence explaining your overall decision",
-  "semgrep_findings": [
-    {{
-      "rule_id": "the rule id from semgrep",
-      "file": "path/to/file.php",
-      "line": 42,
-      "confirmed": true or false,
-      "reason": "why you confirmed or rejected this finding"
-    }}
-  ],
+  "open_issue": false,
+  "summary": "one sentence",
+  "semgrep_findings": [],
   "additional_findings": [
     {{
       "title": "short vulnerability title",
       "file": "path/to/file.php",
       "line": 42,
-      "severity": "HIGH or MEDIUM or LOW",
-      "description": "what the vulnerability is and why the change introduced it"
+      "severity": "HIGH or MEDIUM",
+      "description": "what vulnerability and which added line caused it"
     }}
   ]
 }}
 
-Rules:
-- "open_issue" is true if there is at least one confirmed semgrep finding OR at least one additional finding with severity HIGH or MEDIUM.
-- "additional_findings" can be an empty list [] if you find nothing extra.
-- "semgrep_findings" can be an empty list [] if semgrep found nothing.
-- Do NOT include any text outside the JSON object.
+Note: "open_issue" must always be false — the issue decision is made elsewhere, not by you.
 """
     return prompt
 
