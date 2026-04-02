@@ -18,10 +18,15 @@ rules:
 
 
     pattern-sanitizers:
-    
       - pattern: htmlspecialchars(...)
       - pattern: htmlentities(...)
       - pattern: json_encode(...)
+      - patterns:
+        - pattern: $VAR = htmlspecialchars($VAR)
+      - patterns:
+        - pattern: $VAR = htmlentities($VAR)
+      - patterns:
+        - pattern: $VAR = json_encode($VAR)
 
 
     pattern-sinks:
