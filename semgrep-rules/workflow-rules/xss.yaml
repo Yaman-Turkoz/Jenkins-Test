@@ -2,6 +2,7 @@ rules:
 
   - id: xss-and-debug
     mode: taint
+    taint-mode: strict
     languages: [php]
     severity: WARNING
     message: >
@@ -21,12 +22,6 @@ rules:
       - pattern: htmlspecialchars(...)
       - pattern: htmlentities(...)
       - pattern: json_encode(...)
-      - patterns:
-        - pattern: $VAR = htmlspecialchars($VAR)
-      - patterns:
-        - pattern: $VAR = htmlentities($VAR)
-      - patterns:
-        - pattern: $VAR = json_encode($VAR)
 
 
     pattern-sinks:
