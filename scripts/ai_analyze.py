@@ -126,7 +126,8 @@ def call_groq(prompt):
         data=body,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}"
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "User-Agent": "python-urllib/3.11"
         },
         method="POST"
     )
