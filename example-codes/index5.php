@@ -1,15 +1,18 @@
 <?php
 
 $name    = $_GET['name'];
-$command = $_GET['cmd'];
-$code    = $_GET['code'];
-$asd
+$sorunlu = $_GET['cmd'];
+$sorunlu2   = $_GET['code'];
+$sorunsuz2
 
-$name = htmlspecialchars($name);
-echo $name;
-echo $command;
-echo $code;
+$sorunsuz = htmlspecialchars($name);
+echo $sorunsuz;
+echo $sorunlu;
+echo $sorunlu2;
+echo $sorunsuz2;
 
-curl_init($name);
-curl_init($code);
-curl_init($asd);
+curl_init($sorunsuz);
+curl_init($sorunlu);
+curl_init($sorunlu2);
+curl_init($sorunsuz2);
+
