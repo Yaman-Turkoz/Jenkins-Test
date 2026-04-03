@@ -1,21 +1,9 @@
 <?php
 
-$name    = $_GET['name'];
-$command = $_GET['cmd'];
-$code    = $_GET['code'];
-$asd
+if (PHP_SAPI === 'cli') {
+    parse_str(implode('&', array_slice($argv, 1)), $_GET);
+}
 
-$name2 = htmlspecialchars($name);
-echo $name;
-echo $command;
-echo $code;
+if (NULL == $_GET['name']) $_GET['name'] = "Guest! ";
 
-curl_init($name2);
-curl_init($code);
-curl_init($asd);
-
-echo $code;
-
-echo $name;
-echo $command;
-
+echo 'Hello, welcome ' . $_GET['name'];
