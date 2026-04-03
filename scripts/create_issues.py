@@ -81,7 +81,6 @@ else:
 ### Detected Locations ({len(findings)} finding(s))
 {findings_md}
 ---
-*This issue was automatically created by the GitHub Actions Semgrep scan.*
 """
         subprocess.run([
             "gh", "issue", "create",
@@ -119,7 +118,6 @@ else:
 ```
 
 ---
-
 """
         subprocess.run([
             "gh", "issue", "create",
