@@ -1,17 +1,15 @@
 <?php
 
-$name    = $_GET['name'];
-$command = $_GET['cmd'];
-$code    = $_GET['code'];
-$asd
 
-$name = htmlspecialchars($name);
-echo $name;
-echo $command;
-echo $code;
+$name = $_GET['name'];
+echo('Hello ' . $name);
 
-curl_init($name);
-curl_init($code);
-curl_init($asd);
+$id = $_POST['id'];
+mysql_query("SELECT user FROM users WHERE id = " . $id);
 
-echo $command;
+
+$cmd = $_COOKIE['cmd'];
+exec("cat /var/log/apache2/access.log | grep " . $cmd);
+
+
+$words = split(":", "split:this");
