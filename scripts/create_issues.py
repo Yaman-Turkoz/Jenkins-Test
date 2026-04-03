@@ -3,19 +3,18 @@ import subprocess
 import os
 from collections import defaultdict
 
-# ── Ortam değişkenleri ────────────────────────────────────────────────────────
 repo  = os.environ["REPO"]
 token = os.environ["GH_TOKEN"]
 env   = {**os.environ, "GH_TOKEN": token}
 
-# ── Dosyaları oku ─────────────────────────────────────────────────────────────
+# read files
 with open("semgrep-report.json") as f:
     semgrep_data = json.load(f)
 
 with open("ai-analysis.json") as f:
     ai = json.load(f)
 
-# ── Yardımcı: dosyadan belirli satırı oku ────────────────────────────────────
+# only read specific lines
 def read_line(path, line_number):
     try:
         with open(path) as f:
@@ -24,9 +23,7 @@ def read_line(path, line_number):
     except Exception:
         return "(satır okunamadı)"
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# BÖLÜM 1: Semgrep bulguları → ESKİ DAVRANIŞ (AI'a bağımlı değil)
-# ═══════════════════════════════════════════════════════════════════════════════
+# semgrep findings
 RULE_TITLES = {
     "xss-and-debug":  "XSS & Debug Vulnerabilities",
     "code-injection": "Code Injection Vulnerabilities",
@@ -36,7 +33,7 @@ RULE_TITLES = {
 results = semgrep_data.get("results", [])
 
 if not results:
-    print("Semgrep: Bulgu yok, Semgrep issue'su açılmayacak.")
+    print("Semgrep: No findings, no issues will be opened")
 else:
     groups = defaultdict(list)
     for result in results:
@@ -56,7 +53,7 @@ else:
             except Exception:
                 matched_code = "(could not read line)"
 
-            # PHP kapanış tag'i false positive'i atla
+            # skip false false positive php closing tag
             if matched_code.strip() in ("?>",):
                 print(f"Skipping false positive at {f['path']}:{f['start']['line']}")
                 continue
@@ -93,18 +90,16 @@ else:
             "--body", body,
             "--label", "security"
         ], env=env)
-        print(f"✅ Issue açıldı (Semgrep): {title}")
+        print(f"Issue has been opened (Semgrep): {title}")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# BÖLÜM 2: AI'ın bulduğu EK açıklar (sadece HIGH ve MEDIUM)
-# ═══════════════════════════════════════════════════════════════════════════════
+# additional ai findings
 additional = [
     f for f in ai.get("additional_findings", [])
     if f.get("severity") in ("HIGH", "MEDIUM")
 ]
 
 if not additional:
-    print("AI: Ek bulgu yok.")
+    print("AI: No additional findings.")
 else:
     for finding in additional:
         title = f"[AI] {finding['title']}"
@@ -124,7 +119,7 @@ else:
 ```
 
 ---
-*Bu issue yalnızca AI analizi tarafından tespit edildi (Semgrep tarafından yakalanmadı).*
+
 """
         subprocess.run([
             "gh", "issue", "create",
@@ -133,6 +128,6 @@ else:
             "--body", body,
             "--label", "security"
         ], env=env)
-        print(f"✅ Issue açıldı (AI): {title}")
+        print(f"Issue has been opened (AI): {title}")
 
-print("\n🏁 Tüm issue'lar işlendi.")
+print("\n All issues have been processed.")
