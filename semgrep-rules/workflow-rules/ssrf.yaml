@@ -18,9 +18,15 @@ rules:
     pattern-sinks:
   
       - pattern: curl_init($SINK)
-      - pattern: curl_setopt($CH, CURLOPT_URL, $SINK)
-      - pattern: curl_setopt($CH, CURLOPT_PROXY, $SINK)
-      - pattern: curl_setopt_array($CH, [..., CURLOPT_URL => $SINK, ...])
+      - pattern: curl_setopt($CH, $OPT, $SINK)
+        metavariable-regex:
+          metavariable: $OPT
+          regex: CURLOPT_(URL|PROXY)
+    
+      - pattern: curl_setopt_array($CH, [..., $KEY => $SINK, ...])
+        metavariable-regex:
+          metavariable: $KEY
+          regex: CURLOPT_(URL|PROXY)
 
       - pattern: file_get_contents($SINK, ...)
       - pattern: fopen($SINK, ...)
