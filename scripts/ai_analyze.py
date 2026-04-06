@@ -6,7 +6,6 @@ import urllib.request
 import urllib.error
 import re
 
-# ── Constants ────────────────────────────────────────────────────────────────
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -14,14 +13,14 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 SEMGREP_REPORT = "semgrep-report.json"
 AI_OUTPUT = "ai-analysis.json"
 
-# ── 1. Load Semgrep Report ───────────────────────────────────────────────────
+# load semgrep
 
 def load_semgrep_report():
     with open(SEMGREP_REPORT) as f:
         data = json.load(f)
     return data.get("results", [])
 
-# ── 2. Get Changed Files ─────────────────────────────────────────────────────
+# Get Changed Files 
 
 def get_changed_files():
     result = subprocess.run(
@@ -30,7 +29,7 @@ def get_changed_files():
     )
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
-# ── 3. Read File Contents (FULL CONTEXT for taint analysis) ──────────────────
+# Read File Contents (FULL CONTEXT for taint analysis)
 
 def read_file_contents(file_paths):
     contents = {}
@@ -45,7 +44,7 @@ def read_file_contents(file_paths):
             contents[path] = "(file not found)"
     return contents
 
-# ── 4. Extract Added Lines WITH Mapping (skip empty lines) ───────────────────
+# Extract Added Lines WITH Mapping (skip empty lines)
 
 def extract_added_lines_with_mapping():
     result = subprocess.run(
@@ -69,7 +68,7 @@ def extract_added_lines_with_mapping():
         elif line.startswith("+") and not line.startswith("+++"):
             code = line[1:].strip()
 
-            # 🔥 skip empty / whitespace-only lines (newline commits)
+            # skip empty / whitespace-only lines (newline commits)
             if not code:
                 new_line_num += 1
                 continue
@@ -83,7 +82,7 @@ def extract_added_lines_with_mapping():
 
     return added_lines
 
-# ── 5. Build Prompt ─────────────────────────────────────────────────────────
+# Build Prompt
 
 def build_prompt(semgrep_findings, added_lines, file_contents):
 
@@ -162,7 +161,7 @@ OUTPUT FORMAT (STRICT JSON ONLY)
 """
     return prompt
 
-# ── 6. Call Groq API ────────────────────────────────────────────────────────
+# Call Groq API 
 
 def call_groq(prompt):
     payload = {
@@ -190,7 +189,7 @@ def call_groq(prompt):
 
     return raw["choices"][0]["message"]["content"]
 
-# ── 7. Parse Response (ROBUST JSON EXTRACTOR) ────────────────────────────────
+# Parse Response (ROBUST JSON EXTRACTOR) 
 
 def parse_response(text):
     text = text.strip()
@@ -200,7 +199,7 @@ def parse_response(text):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1])
 
-    # 🔥 extract JSON from noisy response
+    # extract JSON from noisy response
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
         raise ValueError("No JSON found in AI response")
@@ -209,7 +208,7 @@ def parse_response(text):
 
     return json.loads(json_text)
 
-# ── 8. Post-filter (CRITICAL SAFETY) ────────────────────────────────────────
+# Post-filter (CRITICAL SAFETY)
 
 def filter_results(ai_findings, added_lines, semgrep_findings):
     valid = []
@@ -237,7 +236,7 @@ def filter_results(ai_findings, added_lines, semgrep_findings):
 
     return valid
 
-# ── Main ────────────────────────────────────────────────────────────────────
+# Main 
 
 def main():
     print(f"GROQ_API_KEY present: {'YES' if GROQ_API_KEY else 'NO'}")
@@ -258,7 +257,7 @@ def main():
     print("Extracting added lines...")
     added_lines = extract_added_lines_with_mapping()
 
-    # 🔥 skip AI if nothing meaningful changed
+    # skip AI if nothing meaningful changed
     if not added_lines:
         print("No meaningful added lines → skipping AI")
 
