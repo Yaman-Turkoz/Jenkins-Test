@@ -1,0 +1,62 @@
+rules:
+  - id: sql-taint
+    mode: taint
+    languages: [php]
+    severity: ERROR
+
+    message: >
+      Possible SQL Injection: user-controlled input reaches a SQL query.
+      Use prepared statements instead of dynamic query construction.
+
+    metadata:
+      category: security
+      cwe: "CWE-89"
+      technology: [php, mysql, pdo]
+      confidence: HIGH
+
+    # 🔴 SOURCE
+    pattern-sources:
+      - pattern-either:
+          - pattern: $_GET
+          - pattern: $_POST
+          - pattern: $_REQUEST
+          - pattern: $_COOKIE
+
+    # 🔴 SINK
+    pattern-sinks:
+      - pattern-either:
+
+          - pattern: mysqli_query($CONN, $QUERY, ...)
+          - pattern: mysqli_multi_query($CONN, $QUERY)
+          - pattern: mysqli_real_query($CONN, $QUERY)
+
+          - pattern: $CONN->query($QUERY, ...)
+          - pattern: $CONN->multi_query($QUERY)
+          - pattern: $CONN->real_query($QUERY)
+
+          - pattern: $PDO->query($QUERY)
+          - pattern: $PDO->exec($QUERY)
+          - pattern: $PDO->prepare($QUERY)
+    pattern-sanitizers:
+      - pattern-either:
+
+          - pattern: $CONN->prepare(...)
+          - pattern: mysqli_prepare($CONN, ...)
+
+
+    pattern-not-inside: |
+      $STMT = $PDO->prepare("...?");
+      ...
+      $STMT->execute(...);
+
+    pattern-not-inside: |
+      $STMT = $CONN->prepare("...?");
+      ...
+      $STMT->bind_param(...);
+      ...
+      $STMT->execute();
+
+    pattern-not-inside: |
+      $STMT = mysqli_prepare($CONN, "...");
+      ...
+      mysqli_stmt_execute($STMT);
