@@ -1,326 +1,256 @@
+
+
+import base64
 import json
 import os
-import subprocess
 import sys
 import urllib.request
 import urllib.error
-import re
 
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GH_TOKEN     = os.environ.get("GH_TOKEN", "")
+REPO         = os.environ.get("REPO", "")          # e.g. "owner/repo-name"
 
-SEMGREP_REPORT = "semgrep-report.json"
-AI_OUTPUT = "ai-analysis.json"
+GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
+GITHUB_API = "https://api.github.com"
 
-# load semgrep
+CREATED_ISSUES_FILE = "created-issues.json"
 
-def load_semgrep_report():
-    with open(SEMGREP_REPORT) as f:
-        data = json.load(f)
-    return data.get("results", [])
+# ---------------------------------------------------------------------------
+# GitHub API helpers
+# ---------------------------------------------------------------------------
 
-# Get Changed Files 
-
-def get_changed_files():
-    result = subprocess.run(
-        ["git", "diff", "HEAD~1", "HEAD", "--name-only"],
-        capture_output=True, text=True
-    )
-    return [f.strip() for f in result.stdout.splitlines() if f.strip()]
-
-# Read File Contents (FULL CONTEXT for taint analysis)
-
-def read_file_contents(file_paths):
-    contents = {}
-    for path in file_paths:
-        if os.path.exists(path):
-            try:
-                with open(path) as f:
-                    contents[path] = f.read()
-            except Exception as e:
-                contents[path] = f"(error reading file: {e})"
-        else:
-            contents[path] = "(file not found)"
-    return contents
-
-# Extract Added Lines WITH Mapping (skip empty lines)
-
-def extract_added_lines_with_mapping():
-    result = subprocess.run(
-        ["git", "diff", "--unified=0", "HEAD~1", "HEAD"],
-        capture_output=True, text=True
-    )
-
-    diff = result.stdout
-    added_lines = []
-
-    current_file = None
-    new_line_num = 0
-
-    for line in diff.splitlines():
-        if line.startswith("+++ b/"):
-            current_file = line[6:]
-        elif line.startswith("@@"):
-            parts = line.split(" ")
-            new_part = [p for p in parts if p.startswith("+")][0]
-            new_line_num = int(new_part.split(",")[0][1:])
-        elif line.startswith("+") and not line.startswith("+++"):
-            code = line[1:].strip()
-
-            # skip empty / whitespace-only lines (newline commits)
-            if not code:
-                new_line_num += 1
-                continue
-
-            added_lines.append({
-                "file": current_file,
-                "line": new_line_num,
-                "code": code
-            })
-            new_line_num += 1
-
-    return added_lines
-
-# Build Prompt
-
-def build_prompt(semgrep_findings, added_lines, file_contents):
-
-    semgrep_list = []
-    for f in semgrep_findings:
-        semgrep_list.append({
-            "file": f.get("path"),
-            "line": f.get("start", {}).get("line"),
-            "rule": f.get("check_id", "")
-        })
-
-    prompt = f"""
-You are a strict security analyzer.
-
-Your task is to find vulnerabilities that Semgrep MISSED.
-
-────────────────────────────────────────
-FULL FILE CONTEXT (for taint analysis only)
-────────────────────────────────────────
-{json.dumps(file_contents, indent=2)[:12000]}
-
-────────────────────────────────────────
-ADDED LINES (ONLY THESE CAN BE REPORTED)
-────────────────────────────────────────
-{json.dumps(added_lines, indent=2)}
-
-────────────────────────────────────────
-SEMGREP FINDINGS (DO NOT DUPLICATE)
-────────────────────────────────────────
-{json.dumps(semgrep_list, indent=2)}
-
-────────────────────────────────────────
-STRICT RULES (MUST FOLLOW)
-────────────────────────────────────────
-
-1. You may analyze FULL FILE CONTENT for taint/dataflow.
-2. You are ONLY allowed to report vulnerabilities on ADDED LINES.
-3. File + line MUST EXACTLY match an entry from added_lines.
-4. If not in added_lines → DO NOT REPORT.
-
-5. A variable is USER-CONTROLLED ONLY IF:
-   - It directly uses: $_GET, $_POST, $_REQUEST, $_COOKIE, $_FILES
-   - OR is assigned from them in the SAME added_lines
-   - OTHERWISE → SAFE
-
-6. NEVER say "could be" or "potentially".
-7. ONLY report CERTAIN vulnerabilities.
-8. If unsure → DO NOT REPORT.
-
-9. If (file + line) exists in Semgrep findings → SKIP.
-
-10. DO NOT hallucinate flows or variables.
-
-11. If nothing found → return empty list.
-
-12. You MUST respond with ONLY valid JSON.
-   No explanations, no markdown, no extra text.
-
-────────────────────────────────────────
-OUTPUT FORMAT (STRICT JSON ONLY)
-────────────────────────────────────────
-
-{{
-  "open_issue": false,
-  "summary": "short explanation",
-  "additional_findings": [
-    {{
-      "title": "short vulnerability title",
-      "file": "exact/file/path.php",
-      "line": 42,
-      "severity": "HIGH or MEDIUM",
-      "description": "clear explanation referencing the exact added line"
-    }}
-  ]
-}}
-"""
-    return prompt
-
-# Call Groq API 
-
-def call_groq(prompt):
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0,
-        "max_tokens": 2048
+def _gh_headers():
+    return {
+        "Authorization":        f"Bearer {GH_TOKEN}",
+        "Accept":               "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent":           "ai-analyze-script/1.0",
     }
 
-    body = json.dumps(payload).encode("utf-8")
 
-    req = urllib.request.Request(
+def gh_get(path: str) -> dict:
+    url = f"{GITHUB_API}{path}"
+    req = urllib.request.Request(url, headers=_gh_headers())
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode())
+
+
+def gh_post_comment(issue_number: int, body: str) -> dict:
+    url     = f"{GITHUB_API}/repos/{REPO}/issues/{issue_number}/comments"
+    payload = json.dumps({"body": body}).encode("utf-8")
+    req     = urllib.request.Request(
+        url,
+        data=payload,
+        headers={**_gh_headers(), "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode())
+
+
+def fetch_file_content(file_path: str) -> str:
+    """Fetch a file from the repo via the GitHub Contents API (base64-decoded)."""
+    try:
+        data    = gh_get(f"/repos/{REPO}/contents/{file_path}")
+        content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+        return content
+    except Exception as exc:
+        return f"(could not fetch file: {exc})"
+
+# ---------------------------------------------------------------------------
+# Groq API helper
+# ---------------------------------------------------------------------------
+
+def call_groq(prompt: str) -> str:
+    payload = {
+        "model":       "llama-3.3-70b-versatile",
+        "messages":    [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "max_tokens":  2048,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req  = urllib.request.Request(
         GROQ_URL,
         data=body,
         headers={
-            "Content-Type": "application/json",
+            "Content-Type":  "application/json",
             "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent": "python-urllib/3.11"
+            "User-Agent":    "python-urllib/3.11",
         },
-        method="POST"
+        method="POST",
     )
-
     with urllib.request.urlopen(req, timeout=60) as resp:
-        raw = json.loads(resp.read().decode("utf-8"))
-
+        raw = json.loads(resp.read().decode())
     return raw["choices"][0]["message"]["content"]
 
-# Parse Response (ROBUST JSON EXTRACTOR) 
+# ---------------------------------------------------------------------------
+# Prompt builder
+# ---------------------------------------------------------------------------
 
-def parse_response(text):
-    text = text.strip()
+def build_analysis_prompt(rule_id: str, findings_with_code: list) -> str:
+    findings_block = ""
+    for idx, f in enumerate(findings_with_code, start=1):
+        # Limit full-file context to avoid token overflow
+        file_ctx = f["file_content"][:8000]
+        if len(f["file_content"]) > 8000:
+            file_ctx += "\n... (file truncated for brevity)"
 
-    # remove markdown blocks if present
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(lines[1:-1])
+        findings_block += f"""
+### Finding {idx}
+- **File:** `{f['file']}`
+- **Line:** {f['line']}
+- **Semgrep Message:** {f['rule_message']}
 
-    # extract JSON from noisy response
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError("No JSON found in AI response")
+**Matched line:**
+```php
+{f['matched_code']}
+```
 
-    json_text = match.group(0)
+**Full file context (read-only, for taint analysis):**
+```php
+{file_ctx}
+```
+"""
 
-    return json.loads(json_text)
+    return f"""You are an expert application security engineer performing a thorough code review.
 
-# Post-filter (CRITICAL SAFETY)
+Semgrep triggered rule `{rule_id}` on the following finding(s) in a PHP codebase.
 
-def filter_results(ai_findings, added_lines, semgrep_findings):
-    valid = []
+{findings_block}
 
-    allowed_pairs = {
-        (l["file"], l["line"])
-        for l in added_lines
-    }
+---
 
-    semgrep_pairs = {
-        (f.get("path"), f.get("start", {}).get("line"))
-        for f in semgrep_findings
-    }
+Analyse every finding carefully and produce the following four sections.
+Be specific, precise, and reference actual variable names, function names, and line numbers from the code above.
 
-    for f in ai_findings:
-        pair = (f.get("file"), f.get("line"))
+## Verdict
+State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
+Explain *why* in 2-4 sentences referencing the actual code.
+If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
 
-        if pair not in allowed_pairs:
-            continue
+## Fix
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
+Provide a concrete fix for each true-positive finding.
+Include a before/after code snippet written in PHP.
 
-        if pair in semgrep_pairs:
-            continue
+## Proof of Concept
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
+Write a realistic, step-by-step PoC showing how an attacker could exploit this vulnerability.
+For web vulnerabilities include the exact HTTP request or browser-side payload.
 
-        valid.append(f)
+## Code Flow
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
+Describe the taint flow from the user-controlled source to the vulnerable sink,
+referencing actual variable names and line numbers.
+Use a numbered list (e.g. 1 → 2 → 3) to show each hop.
 
-    return valid
+---
+Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
+"""
 
-# Main 
+# ---------------------------------------------------------------------------
+# Comment formatter
+# ---------------------------------------------------------------------------
+
+def format_comment(rule_id: str, analysis_text: str) -> str:
+    return f"""## 🤖 AI Security Analysis
+
+> **Rule:** `{rule_id}`
+> This analysis was generated automatically. Always verify findings manually before acting on them.
+
+---
+
+{analysis_text}
+
+---
+*Powered by Groq · llama-3.3-70b-versatile*
+"""
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main():
-    print(f"GROQ_API_KEY present: {'YES' if GROQ_API_KEY else 'NO'}")
+    print(f"GH_TOKEN present     : {'YES' if GH_TOKEN else 'NO'}")
+    print(f"GROQ_API_KEY present : {'YES' if GROQ_API_KEY else 'NO'}")
+    print(f"REPO                 : {REPO}")
 
+    if not GH_TOKEN:
+        print("ERROR: Missing GH_TOKEN")
+        sys.exit(1)
     if not GROQ_API_KEY:
-        print("Missing GROQ_API_KEY")
+        print("ERROR: Missing GROQ_API_KEY")
+        sys.exit(1)
+    if not REPO:
+        print("ERROR: Missing REPO")
         sys.exit(1)
 
-    print("Loading Semgrep results...")
-    semgrep_findings = load_semgrep_report()
-
-    print("Detecting changed files...")
-    changed_files = get_changed_files()
-
-    print("Reading file contents...")
-    file_contents = read_file_contents(changed_files)
-
-    print("Extracting added lines...")
-    added_lines = extract_added_lines_with_mapping()
-
-    # skip AI if nothing meaningful changed
-    if not added_lines:
-        print("No meaningful added lines → skipping AI")
-
-        with open(AI_OUTPUT, "w") as f:
-            json.dump({
-                "open_issue": False,
-                "summary": "No relevant code changes",
-                "additional_findings": []
-            }, f, indent=2)
-
+    # Load issues created by create_issues.py
+    if not os.path.exists(CREATED_ISSUES_FILE):
+        print(f"{CREATED_ISSUES_FILE} not found — nothing to analyse.")
         return
 
-    print("Building prompt...")
-    prompt = build_prompt(semgrep_findings, added_lines, file_contents)
+    with open(CREATED_ISSUES_FILE) as f:
+        issues = json.load(f)
 
-    print("Calling AI...")
-
-    try:
-        raw = call_groq(prompt)
-    except Exception as e:
-        print("AI call failed:", e)
-
-        with open(AI_OUTPUT, "w") as f:
-            json.dump({
-                "open_issue": False,
-                "summary": "AI skipped due to API error",
-                "additional_findings": []
-            }, f, indent=2)
-
+    if not issues:
+        print("No issues to analyse.")
         return
 
-    print("Parsing response...")
+    print(f"\nFound {len(issues)} issue(s) to analyse.\n")
 
-    try:
-        parsed = parse_response(raw)
-    except Exception as e:
-        print("AI response invalid:", e)
+    for issue in issues:
+        issue_number = issue["issue_number"]
+        rule_id      = issue["rule_id"]
+        findings     = issue["findings"]
 
-        parsed = {
-            "open_issue": False,
-            "summary": "AI response invalid",
-            "additional_findings": []
-        }
+        print(f"─── Issue #{issue_number}  (rule: {rule_id}) ───")
 
-    print("Filtering results...")
+        # Fetch full file content for each finding via GitHub API
+        findings_with_code = []
+        for finding in findings:
+            file_path    = finding["file"]
+            line         = finding["line"]
+            matched_code = finding.get("matched_code", "")
+            rule_message = finding.get("rule_message", "")
 
-    filtered = filter_results(
-        parsed.get("additional_findings", []),
-        added_lines,
-        semgrep_findings
-    )
+            print(f"  → Fetching {file_path} ...")
+            file_content = fetch_file_content(file_path)
 
-    final_output = {
-        "open_issue": len(filtered) > 0,
-        "summary": parsed.get("summary", ""),
-        "additional_findings": filtered
-    }
+            findings_with_code.append({
+                "file":         file_path,
+                "line":         line,
+                "matched_code": matched_code,
+                "rule_message": rule_message,
+                "file_content": file_content,
+            })
 
-    with open(AI_OUTPUT, "w") as f:
-        json.dump(final_output, f, indent=2, ensure_ascii=False)
+        # Build prompt and query the LLM
+        prompt = build_analysis_prompt(rule_id, findings_with_code)
 
-    print(f"Done → {AI_OUTPUT}")
-    print(f"Findings: {len(filtered)}")
+        print(f"  → Calling AI ...")
+        try:
+            analysis_text = call_groq(prompt)
+        except Exception as exc:
+            print(f"  ✗ AI call failed: {exc}")
+            analysis_text = f"AI analysis could not be completed due to an API error:\n```\n{exc}\n```"
+
+        # Post comment on the GitHub issue
+        comment_body = format_comment(rule_id, analysis_text)
+        print(f"  → Posting comment on issue #{issue_number} ...")
+        try:
+            gh_post_comment(issue_number, comment_body)
+            print(f"  ✓ Comment posted on issue #{issue_number}")
+        except Exception as exc:
+            print(f"  ✗ Failed to post comment: {exc}")
+
+    print("\nAI analysis complete.")
+
 
 if __name__ == "__main__":
     main()
