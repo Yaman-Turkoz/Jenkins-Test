@@ -28,6 +28,7 @@ RULE_TITLES = {
     "xss-and-debug":  "XSS & Debug Vulnerabilities",
     "code-injection": "Code Injection Vulnerabilities",
     "ssrf-taint":     "SSRF Vulnerabilities",
+    "sql-taint": "SQL Injection Vulnerabilities",
 }
 
 results = semgrep_data.get("results", [])
