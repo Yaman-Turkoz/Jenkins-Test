@@ -160,9 +160,9 @@ For web vulnerabilities include the exact HTTP request or browser-side payload.
 
 ## Code Flow
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
-Describe the taint flow from the user-controlled source to the vulnerable sink,
+Show taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
-Use a more visual approach using arrows.
+Use a more visual approach using arrows, like a tree from top to bottom.
 
 ---
 Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
