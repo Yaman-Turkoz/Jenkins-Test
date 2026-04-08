@@ -3,7 +3,7 @@
 $name    = $_GET['name'];
 $command = $_GET['cmd'];
 $code    = $_GET['code'];
-$asd
+$asd;
 
 echo $code;
 
