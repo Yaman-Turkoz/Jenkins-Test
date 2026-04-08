@@ -2,7 +2,6 @@ rules:
 
   - id: xss-and-debug
     mode: taint
-    taint-mode: strict
     languages: [php]
     severity: WARNING
     message: >
