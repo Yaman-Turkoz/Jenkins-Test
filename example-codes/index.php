@@ -5,6 +5,8 @@ $command = $_GET['cmd'];
 $code    = $_GET['code'];
 $asd
 
+echo $code;
+
 echo $name;
 
 var_dump($name);
