@@ -147,6 +147,21 @@ Be VERY sure when you decide if the finding is true or false. Do double check if
 Explain *why* in 2-4 sentences referencing the actual code.
 If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
 
+    IMPORTANT VALIDATION RULES:
+    
+        Mark a finding as TRUE POSITIVE ONLY if:
+        - The reported sink directly receives attacker-controlled input in the shown code path.
+        - The taint flow is explicit and observable in the provided code.
+        - The vulnerability can be exploited without assuming additional unrelated vulnerabilities.
+        
+        Mark a finding as FALSE POSITIVE if:
+        - Exploitation requires hypothetical assumptions not shown in the code.
+        - Exploitation depends on attacker first compromising another system/component.
+        - Data is only indirectly influenced in speculative ways (e.g. "attacker could poison database first").
+        - The reported taint flow is not directly demonstrated in the provided code.
+
+        DO NOT classify a finding as TRUE POSITIVE based on hypothetical future database poisoning or second-order attacks unless explicitly shown in the provided code.
+
 ## Fix
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
 Provide a concrete fix for each true-positive finding.
