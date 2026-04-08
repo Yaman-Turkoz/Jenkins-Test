@@ -7,23 +7,18 @@ import sys
 import urllib.request
 import urllib.error
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
-REPO         = os.environ.get("REPO", "")          # e.g. "owner/repo-name"
+REPO         = os.environ.get("REPO", "")         
 
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GITHUB_API = "https://api.github.com"
 
 CREATED_ISSUES_FILE = "created-issues.json"
 
-# ---------------------------------------------------------------------------
-# GitHub API helpers
-# ---------------------------------------------------------------------------
 
+# GitHub API helpers
 def _gh_headers():
     return {
         "Authorization":        f"Bearer {GH_TOKEN}",
@@ -62,10 +57,8 @@ def fetch_file_content(file_path: str) -> str:
     except Exception as exc:
         return f"(could not fetch file: {exc})"
 
-# ---------------------------------------------------------------------------
-# Groq API helper
-# ---------------------------------------------------------------------------
 
+# Groq API helper
 def call_groq(prompt: str) -> str:
     payload = {
         "model":       "llama-3.3-70b-versatile",
@@ -88,9 +81,8 @@ def call_groq(prompt: str) -> str:
         raw = json.loads(resp.read().decode())
     return raw["choices"][0]["message"]["content"]
 
-# ---------------------------------------------------------------------------
+
 # Prompt builder
-# ---------------------------------------------------------------------------
 
 def build_analysis_prompt(rule_id: str, findings_with_code: list) -> str:
     findings_block = ""
@@ -153,9 +145,8 @@ Use a numbered list (e.g. 1 → 2 → 3) to show each hop.
 Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
 """
 
-# ---------------------------------------------------------------------------
+
 # Comment formatter
-# ---------------------------------------------------------------------------
 
 def format_comment(rule_id: str, analysis_text: str) -> str:
     return f"""## 🤖 AI Security Analysis
@@ -171,9 +162,7 @@ def format_comment(rule_id: str, analysis_text: str) -> str:
 *Powered by Groq · llama-3.3-70b-versatile*
 """
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+
 
 def main():
     print(f"GH_TOKEN present     : {'YES' if GH_TOKEN else 'NO'}")
