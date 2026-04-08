@@ -1,9 +1,9 @@
 name: Semgrep Security Scan
 on:
   push:
-    branches: ["main"]
+    branches: ["using-ai-to-find-issues"]
   pull_request:
-    branches: ["main"]
+    branches: ["using-ai-to-find-issues"]
 
 jobs:
   semgrep:
