@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      # ── Step 1: Run Semgrep ────────────────────────────────────────────────
+      # run semgrep
       - name: Run Semgrep
         run: |
           pip install semgrep
@@ -30,17 +30,16 @@ jobs:
             --json \
             --output=semgrep-report.json || true
 
-      # ── Step 2: Open GitHub Issues for every Semgrep finding ──────────────
-      #    Also writes created-issues.json for the AI step below.
+      # open issues for semgrep findings
+      # writes created-issues.json for the ai
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: python3 scripts/create_issues.py
 
-      # ── Step 3: AI analysis — posts a comment on each opened issue ─────────
-      #    Reads created-issues.json, fetches source files via GitHub API,
-      #    and comments: verdict, fix, PoC, and code flow.
+      # posts a comment on each opened issue
+      # read created-issues.json, fetches source files via GitHub API and comments: verdict, fix, PoC, and code flow.
       - name: AI Analysis — comment on issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,7 +47,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: python3 scripts/ai_analyze.py
 
-      # ── Artifacts ─────────────────────────────────────────────────────────
+      # artifacts
       - name: Upload reports
         uses: actions/upload-artifact@v4
         if: always()
