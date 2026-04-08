@@ -151,6 +151,12 @@ Mark a finding as FALSE POSITIVE if:
 - Data is only indirectly influenced in speculative ways (e.g. "attacker could poison database first").
 - The reported taint flow is not directly demonstrated in the provided code.
 
+STRICT RULES:
+- Ignore hypothetical second-order attacks.
+- Ignore stored-XSS assumptions unless explicitly shown.
+- Ignore vulnerabilities not reported in this issue.
+- Do not discuss unrelated security concerns.
+
 DO NOT classify a finding as TRUE POSITIVE based on hypothetical future database poisoning or second-order attacks unless explicitly shown in the provided code.
 
 
