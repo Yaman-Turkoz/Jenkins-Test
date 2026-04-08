@@ -143,6 +143,7 @@ Be specific, precise, and reference actual variable names, function names, and l
 
 ## Verdict
 State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
+Be VERY sure when you decide if the finding is true or false. Do double check if necessary. Do NOT assume when you are making decisions, be sure of it.
 Explain *why* in 2-4 sentences referencing the actual code.
 If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
 
