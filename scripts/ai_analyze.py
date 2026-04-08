@@ -8,10 +8,9 @@ import urllib.request
 import urllib.error
 
 
-
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
-REPO         = os.environ.get("REPO", "")          # e.g. "owner/repo-name"
+REPO         = os.environ.get("REPO", "")         
 
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GITHUB_API = "https://api.github.com"
@@ -20,7 +19,6 @@ CREATED_ISSUES_FILE = "created-issues.json"
 
 
 # GitHub API helpers
-
 def _gh_headers():
     return {
         "Authorization":        f"Bearer {GH_TOKEN}",
@@ -61,7 +59,6 @@ def fetch_file_content(file_path: str) -> str:
 
 
 # Groq API helper
-
 def call_groq(prompt: str) -> str:
     payload = {
         "model":       "llama-3.3-70b-versatile",
@@ -120,60 +117,53 @@ Semgrep triggered rule `{rule_id}` on the following finding(s) in a PHP codebase
 
 ---
 
-════════════════════════════════════════
-STRICT RULES — YOU MUST FOLLOW EXACTLY
-════════════════════════════════════════
+IMPORTANT SCOPE RULES:
+Your analysis scope is STRICTLY LIMITED to the vulnerability type indicated by rule `{rule_id}`. 
+You CAN'T mention any other findings that are not listed inside this specific issue.
 
-RULE 1 — SCOPE LOCK:
-  You are analysing ONLY the finding(s) listed above.
-  You MUST NOT mention, reference, or hint at any other vulnerability,
-  issue, rule, or file that is not part of the finding(s) above.
-  Even if you notice another bug in the code, DO NOT mention it.
+DO NOT:
+- Mention unrelated vulnerabilities.
+- Suggest fixes for other security issues found in the code.
+- Provide proof-of-concept for other vulnerabilities.
+- Mention "however there may be another issue..." or similar language.
+- Expand analysis beyond the reported finding.
 
-RULE 2 — FALSE POSITIVE HARD STOP:
-  If your verdict for a finding is FALSE POSITIVE:
-    - Write ONLY the ## Verdict section.
-    - DO NOT write ## Fix, ## Proof of Concept, or ## Code Flow.
-    - DO NOT suggest any fix, workaround, or alternative remediation.
-    - DO NOT describe any other vulnerability you noticed in the file.
-    - STOP your response after the ## Verdict section.
+If the finding is FALSE POSITIVE:
+- Explain ONLY why this finding is false positive.
+- DO NOT provide Fix / PoC / Code Flow.
+- DO NOT suggest unrelated remediation.
 
-RULE 3 — TRUE POSITIVE ONLY SECTIONS:
-  Write ## Fix, ## Proof of Concept, and ## Code Flow ONLY when the verdict
-  is TRUE POSITIVE, and ONLY for the specific vulnerability flagged by
-  rule `{rule_id}`.
+If the finding is TRUE POSITIVE:
+- Provide Fix / PoC / Code Flow ONLY for THIS finding.
 
-════════════════════════════════════════
+---
 
-Analyse every finding and produce the sections below.
-Be specific and reference actual variable names and line numbers from the code above.
+Analyse every finding carefully and produce the following four sections.
+Be specific, precise, and reference actual variable names, function names, and line numbers from the code above.
 
 ## Verdict
 State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
 Explain *why* in 2-4 sentences referencing the actual code.
 If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
-If ALL findings are FALSE POSITIVE → stop here. Do not write anything else.
 
 ## Fix
-*(TRUE POSITIVE only — omit this section entirely otherwise.)*
-Provide a concrete fix for the flagged vulnerability.
-Include a before/after PHP code snippet.
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
+Provide a concrete fix for each true-positive finding.
+Include a before/after code snippet written in PHP.
 
 ## Proof of Concept
-*(TRUE POSITIVE only — omit this section entirely otherwise.)*
-Write a realistic, step-by-step PoC showing how an attacker could exploit
-the specific vulnerability flagged by rule `{rule_id}`.
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
+Write a realistic, step-by-step PoC showing how an attacker could exploit this vulnerability.
 For web vulnerabilities include the exact HTTP request or browser-side payload.
 
 ## Code Flow
-*(TRUE POSITIVE only — omit this section entirely otherwise.)*
+*(Skip this section entirely if all findings are FALSE POSITIVE.)*
 Describe the taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
-Use a numbered list (1 → 2 → 3) to show each hop.
+Use a numbered list (e.g. 1 → 2 → 3) to show each hop.
 
 ---
-Output ONLY the Markdown sections described above.
-Do not add preambles, conclusions, disclaimers, or commentary of any kind.
+Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
 """
 
 
@@ -190,8 +180,9 @@ def format_comment(rule_id: str, analysis_text: str) -> str:
 {analysis_text}
 
 ---
-
+*Powered by Groq · llama-3.3-70b-versatile*
 """
+
 
 
 def main():
