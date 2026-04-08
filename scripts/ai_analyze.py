@@ -138,28 +138,6 @@ If the finding is FALSE POSITIVE:
 If the finding is TRUE POSITIVE:
 - Provide Fix / PoC / Code Flow ONLY for THIS finding.
 
-IMPORTANT VALIDATION RULES:
-    
-Mark a finding as TRUE POSITIVE ONLY if:
-- The reported sink directly receives attacker-controlled input in the shown code path.
-- The taint flow is explicit and observable in the provided code.
-- The vulnerability can be exploited without assuming additional unrelated vulnerabilities.
-        
-Mark a finding as FALSE POSITIVE if:
-- Exploitation requires hypothetical assumptions not shown in the code.
-- Exploitation depends on attacker first compromising another system/component.
-- Data is only indirectly influenced in speculative ways (e.g. "attacker could poison database first").
-- The reported taint flow is not directly demonstrated in the provided code.
-
-STRICT RULES:
-- Ignore hypothetical second-order attacks.
-- Ignore stored-XSS assumptions unless explicitly shown.
-- Ignore vulnerabilities not reported in this issue.
-- Do not discuss unrelated security concerns.
-
-DO NOT classify a finding as TRUE POSITIVE based on hypothetical future database poisoning or second-order attacks unless explicitly shown in the provided code.
-
-
 ---
 
 Analyse every finding carefully and produce the following four sections.
