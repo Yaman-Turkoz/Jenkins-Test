@@ -7,7 +7,7 @@ $asd;
 
 echo $code;
 
-echo $cmd;
+echo $command;
 
 var_dump($name);
 
