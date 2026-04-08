@@ -145,9 +145,8 @@ Be specific, precise, and reference actual variable names, function names, and l
 
 ## Verdict
 State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
-Be VERY sure when you decide if the finding is true or false. Do double check if necessary. Do NOT assume when you are making decisions, be sure of it.
 Explain *why* in 2-4 sentences referencing the actual code.
-If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
+If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ..."). Becareful with the formatting, put new-line between findings.
 
 ## Fix
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
@@ -163,7 +162,7 @@ For web vulnerabilities include the exact HTTP request or browser-side payload.
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
 Describe the taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
-Use a numbered list (e.g. 1 → 2 → 3) to show each hop.
+Use a more visual approach using arrows.
 
 ---
 Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
