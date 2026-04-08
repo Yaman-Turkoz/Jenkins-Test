@@ -109,7 +109,9 @@ def build_analysis_prompt(rule_id: str, findings_with_code: list) -> str:
 ```
 """
 
-    return f"""You are an expert application security engineer performing a thorough code review.
+    return f"""You are a Semgrep triage engine.
+Your job is NOT to perform a security review.
+Your ONLY task is to validate whether the reported Semgrep finding matches the exact taint flow shown in code.
 
 Semgrep triggered rule `{rule_id}` on the following finding(s) in a PHP codebase.
 
@@ -136,6 +138,22 @@ If the finding is FALSE POSITIVE:
 If the finding is TRUE POSITIVE:
 - Provide Fix / PoC / Code Flow ONLY for THIS finding.
 
+IMPORTANT VALIDATION RULES:
+    
+Mark a finding as TRUE POSITIVE ONLY if:
+- The reported sink directly receives attacker-controlled input in the shown code path.
+- The taint flow is explicit and observable in the provided code.
+- The vulnerability can be exploited without assuming additional unrelated vulnerabilities.
+        
+Mark a finding as FALSE POSITIVE if:
+- Exploitation requires hypothetical assumptions not shown in the code.
+- Exploitation depends on attacker first compromising another system/component.
+- Data is only indirectly influenced in speculative ways (e.g. "attacker could poison database first").
+- The reported taint flow is not directly demonstrated in the provided code.
+
+DO NOT classify a finding as TRUE POSITIVE based on hypothetical future database poisoning or second-order attacks unless explicitly shown in the provided code.
+
+
 ---
 
 Analyse every finding carefully and produce the following four sections.
@@ -146,21 +164,6 @@ State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
 Be VERY sure when you decide if the finding is true or false. Do double check if necessary. Do NOT assume when you are making decisions, be sure of it.
 Explain *why* in 2-4 sentences referencing the actual code.
 If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ...").
-
-    IMPORTANT VALIDATION RULES:
-    
-        Mark a finding as TRUE POSITIVE ONLY if:
-        - The reported sink directly receives attacker-controlled input in the shown code path.
-        - The taint flow is explicit and observable in the provided code.
-        - The vulnerability can be exploited without assuming additional unrelated vulnerabilities.
-        
-        Mark a finding as FALSE POSITIVE if:
-        - Exploitation requires hypothetical assumptions not shown in the code.
-        - Exploitation depends on attacker first compromising another system/component.
-        - Data is only indirectly influenced in speculative ways (e.g. "attacker could poison database first").
-        - The reported taint flow is not directly demonstrated in the provided code.
-
-        DO NOT classify a finding as TRUE POSITIVE based on hypothetical future database poisoning or second-order attacks unless explicitly shown in the provided code.
 
 ## Fix
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
