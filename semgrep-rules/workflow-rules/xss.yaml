@@ -35,6 +35,10 @@ rules:
       - pattern: vprintf($SINK, ...);
 
       - pattern: print_r($SINK);
+      - pattern: die($SINK);
+      - pattern: exit($SINK);
+      - pattern: var_dump($SINK);
+      - pattern: var_dump($SINK, ...);
 
 
       - patterns:
