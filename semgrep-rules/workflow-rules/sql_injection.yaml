@@ -16,10 +16,10 @@ rules:
 
     pattern-sources:
       - pattern-either:
-          - pattern: $_GET
-          - pattern: $_POST
-          - pattern: $_REQUEST
-          - pattern: $_COOKIE
+          - pattern: $_GET[...]
+          - pattern: $_POST[...]
+          - pattern: $_REQUEST[...]
+          - pattern: $_COOKIE[...]
 
     pattern-sinks:
       - pattern-either:
@@ -34,7 +34,12 @@ rules:
 
           - pattern: $PDO->query($QUERY)
           - pattern: $PDO->exec($QUERY)
-          - pattern: $PDO->prepare($QUERY)
+          
+          - patterns:
+            - pattern: $PDO->prepare($QUERY)
+            - metavariable-pattern:
+                metavariable: $QUERY
+                pattern: "...".$X."..."
     pattern-sanitizers:
       - pattern-either:
 
