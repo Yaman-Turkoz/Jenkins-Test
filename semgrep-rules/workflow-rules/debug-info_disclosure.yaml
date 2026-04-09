@@ -1,22 +1,23 @@
-- id: debug-information-leak
-  languages: [php]
-  severity: INFO
-  message: >
-    Debug/error information is exposed to the user.
-    This may leak sensitive internal application details.
-  patterns:
-    - pattern-either:
-
-        - pattern: var_dump(...)
-        - pattern: phpinfo(...)
-        
-        - pattern: die(mysqli_error(...))
-        - pattern: exit(mysqli_error(...))
-        - pattern: die(pg_last_error(...))
-        - pattern: die(PDO::errorInfo(...))
-        
-        - pattern: print_r($VAR)
-        
-  pattern-not:
-    - pattern: trigger_error(...)
-    - pattern: print_r($VAR, true)
+rules:
+  - id: debug-information-leak
+    languages: [php]
+    severity: INFO
+    message: >
+      Debug/error information is exposed to the user.
+      This may leak sensitive internal application details.
+    patterns:
+      - pattern-either:
+  
+          - pattern: var_dump(...)
+          - pattern: phpinfo(...)
+          
+          - pattern: die(mysqli_error(...))
+          - pattern: exit(mysqli_error(...))
+          - pattern: die(pg_last_error(...))
+          - pattern: die(PDO::errorInfo(...))
+          
+          - pattern: print_r($VAR)
+          
+    pattern-not:
+      - pattern: trigger_error(...)
+      - pattern: print_r($VAR, true)
