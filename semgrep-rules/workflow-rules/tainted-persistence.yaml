@@ -1,3 +1,4 @@
+rules:
   - id: tainted-persistence
     mode: taint
     languages: [php]
