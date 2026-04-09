@@ -1,18 +1,11 @@
 <?php
 
-$name    = $_GET['name'];
-$sorunlu = $_GET['cmd'];
-$sorunlu2   = $_GET['code'];
-$sorunsuz3 = 'a';
+header ("X-XSS-Protection: 0");
 
-$sorunsuz = htmlspecialchars($name);
-echo $sorunsuz;
-echo $sorunlu;
-echo $sorunlu2;
-echo $sorunsuz3;
+// Is there any input?
+if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
+	// Feedback for end user
+	$html .= '<pre>Hello ' . $_GET[ 'name' ] . '</pre>';
+}
 
-curl_init($sorunsuz);
-curl_init($sorunlu);
-curl_init($sorunlu2);
-curl_init($sorunsuz3);
-
+?>
