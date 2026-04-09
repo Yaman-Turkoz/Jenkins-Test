@@ -1,0 +1,25 @@
+  - id: tainted-persistence
+    mode: taint
+    languages: [php]
+    severity: INFO
+
+    message: >
+      User-controlled data is being stored in persistent storage.
+      Ensure proper output encoding when rendering stored content to prevent Stored XSS.
+
+
+    pattern-sources:
+      - pattern: $_GET[...]
+      - pattern: $_POST[...]
+      - pattern: $_REQUEST[...]
+      - pattern: $_COOKIE[...]
+
+    pattern-sanitizers:
+      - pattern: htmlspecialchars(...)
+      - pattern: htmlentities(...)
+      - pattern: json_encode(...)
+
+    pattern-sinks:
+      - pattern: mysqli_query(..., $QUERY)
+      - pattern: $PDO->query($QUERY)
+      - pattern: $PDO->exec($QUERY)
