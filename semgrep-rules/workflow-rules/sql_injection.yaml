@@ -43,6 +43,6 @@ rules:
     pattern-sanitizers:
       - pattern-either:
 
-          - pattern: $CONN->prepare(...)
+          - pattern: $MYSQLI_CONN->prepare(...)
           - pattern: mysqli_prepare($CONN, ...)
 
