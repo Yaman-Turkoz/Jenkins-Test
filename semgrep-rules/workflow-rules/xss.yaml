@@ -45,4 +45,10 @@ rules:
       - pattern: fputs(..., $SINK)
       - pattern: fwrite(..., $SINK)
 
+      - patterns:
+        - pattern: $HTML .= $SINK;
+        - metavariable-regex:
+            metavariable: $HTML
+            regex: (?i).*(html|body|output|content|response).*
+
 
