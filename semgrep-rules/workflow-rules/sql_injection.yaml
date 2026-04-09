@@ -36,10 +36,10 @@ rules:
           - pattern: $PDO->exec($QUERY)
           
           - patterns:
-            - pattern: $PDO->prepare($QUERY)
-            - metavariable-pattern:
-                metavariable: $QUERY
-                pattern: "...".$X."..."
+              - pattern: $PDO->prepare($QUERY)
+              - metavariable-pattern:
+                  metavariable: $QUERY
+                  pattern: "...".$X."..."
     pattern-sanitizers:
       - pattern-either:
 
