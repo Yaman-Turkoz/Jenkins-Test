@@ -1,12 +1,11 @@
 rules:
 
-  - id: xss-and-debug
+  - id: reflected-xss
     mode: taint
     languages: [php]
-    severity: WARNING
+    severity: ERROR
     message: >
-      XSS vulnerability detected: user-controlled data ($SINK) reaches an unsafe sink
-      without being sanitized. This can lead to a Cross-Site Scripting (XSS) attack.
+      Possible XSS: user-controlled input reaches HTML output without sanitization.
 
     pattern-sources:
 
@@ -35,20 +34,13 @@ rules:
       - pattern: fprintf(..., $SINK, ...);
       - pattern: vprintf($SINK, ...);
 
-      - pattern: die($SINK);
-      - pattern: exit($SINK);
-
-      - pattern: var_dump($SINK);
-      - pattern: var_dump($SINK, ...);
       - pattern: print_r($SINK);
 
-      - pattern: fputs(..., $SINK)
-      - pattern: fwrite(..., $SINK)
 
       - patterns:
         - pattern: $HTML .= $SINK;
         - metavariable-regex:
             metavariable: $HTML
-            regex: (?i).*(html|body|output|content|response).*
+            regex: (?i).*(html|body|output|content|response|page|view).*
 
 
