@@ -13,10 +13,9 @@ with open("semgrep-report.json") as f:
 
 RULE_TITLES = {
     "reflected-xss":  "XSS Vulnerabilities",
-    "code-injection": "Code Injection Vulnerabilities",
     "ssrf-taint":     "SSRF Vulnerabilities",
     "sql-taint":      "SQL Injection Vulnerabilities",
-    "tainted-persistence":      "Stored XSS Vulnerabilities",
+    "incorrect-sanitization":      "Incorrect Sanitization Vulnerabilities",
     "debug-information-leak":      "Debug/Rrror Information Leak",
 }
 
