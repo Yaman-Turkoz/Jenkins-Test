@@ -1,5 +1,3 @@
-
-
 import base64
 import json
 import os
@@ -10,15 +8,19 @@ import urllib.error
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
-REPO         = os.environ.get("REPO", "")         
+REPO         = os.environ.get("REPO", "")
 
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GITHUB_API = "https://api.github.com"
 
 CREATED_ISSUES_FILE = "created-issues.json"
 
+# Tool call loop limit — AI can read at most this many files per issue
+MAX_TOOL_CALLS = 20
 
-# GitHub API helpers
+
+# ── GitHub API helpers ────────────────────────────────────────────────────────
+
 def _gh_headers():
     return {
         "Authorization":        f"Bearer {GH_TOKEN}",
@@ -58,36 +60,142 @@ def fetch_file_content(file_path: str) -> str:
         return f"(could not fetch file: {exc})"
 
 
-# Groq API helper
-def call_groq(prompt: str) -> str:
-    payload = {
-        "model":       "llama-3.3-70b-versatile",
-        "messages":    [{"role": "user", "content": prompt}],
-        "temperature": 0,
-        "max_tokens":  2048,
-    }
-    body = json.dumps(payload).encode("utf-8")
-    req  = urllib.request.Request(
-        GROQ_URL,
-        data=body,
-        headers={
-            "Content-Type":  "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "User-Agent":    "python-urllib/3.11",
+def fetch_repo_tree() -> list[str]:
+    """
+    Return a flat list of all file paths in the repo using the Git Trees API.
+    Falls back to an empty list on error.
+    """
+    try:
+        # Get default branch HEAD SHA
+        repo_info   = gh_get(f"/repos/{REPO}")
+        default_branch = repo_info.get("default_branch", "main")
+        branch_data = gh_get(f"/repos/{REPO}/branches/{default_branch}")
+        tree_sha    = branch_data["commit"]["commit"]["tree"]["sha"]
+
+        # Recursive tree fetch
+        tree_data = gh_get(f"/repos/{REPO}/git/trees/{tree_sha}?recursive=1")
+        return [
+            item["path"]
+            for item in tree_data.get("tree", [])
+            if item["type"] == "blob"   # files only, no dirs
+        ]
+    except Exception as exc:
+        print(f"  ⚠ Could not fetch repo tree: {exc}")
+        return []
+
+
+# ── Groq API helper (with tool calling) ──────────────────────────────────────
+
+# The single tool we expose to the AI
+FETCH_FILE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "fetch_file",
+        "description": (
+            "Read the full source of any file in the repository. "
+            "Use this to trace taint flows across files — e.g. to find the caller "
+            "that includes the finding file, or to locate the sink that outputs a "
+            "tainted variable. You may call this tool multiple times."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Repo-root-relative path to the file, e.g. 'vulnerabilities/xss_r/index.php'",
+                }
+            },
+            "required": ["path"],
         },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        raw = json.loads(resp.read().decode())
-    return raw["choices"][0]["message"]["content"]
+    },
+}
 
 
-# Prompt builder
+def call_groq_with_tools(messages: list) -> list:
+    """
+    Run a tool-calling loop with Groq.
+    Returns the final messages list (including all tool exchanges).
+    The last message with role='assistant' and no tool_calls is the final answer.
+    """
+    tool_calls_made = 0
 
-def build_analysis_prompt(rule_id: str, findings_with_code: list) -> str:
+    while True:
+        payload = {
+            "model":       "llama-3.3-70b-versatile",
+            "messages":    messages,
+            "tools":       [FETCH_FILE_TOOL],
+            "tool_choice": "auto",
+            "temperature": 0,
+            "max_tokens":  4096,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req  = urllib.request.Request(
+            GROQ_URL,
+            data=body,
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "User-Agent":    "python-urllib/3.11",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = json.loads(resp.read().decode())
+
+        assistant_msg = raw["choices"][0]["message"]
+        messages.append(assistant_msg)
+
+        # No tool calls → AI is done
+        if not assistant_msg.get("tool_calls"):
+            return messages
+
+        # Safety limit
+        if tool_calls_made >= MAX_TOOL_CALLS:
+            print(f"  ⚠ Reached MAX_TOOL_CALLS ({MAX_TOOL_CALLS}), stopping tool loop.")
+            return messages
+
+        # Process every tool call the AI requested in this turn
+        for tc in assistant_msg["tool_calls"]:
+            tool_calls_made += 1
+            tc_id   = tc["id"]
+            tc_name = tc["function"]["name"]
+
+            try:
+                args = json.loads(tc["function"]["arguments"])
+            except Exception:
+                args = {}
+
+            if tc_name == "fetch_file":
+                path = args.get("path", "")
+                print(f"    🔍 AI is reading: {path}")
+                content = fetch_file_content(path)
+                # Truncate very large files to keep context sane
+                if len(content) > 12000:
+                    content = content[:12000] + "\n... (file truncated at 12 000 chars)"
+                result = content
+            else:
+                result = f"Unknown tool: {tc_name}"
+
+            # Append tool result back into the conversation
+            messages.append({
+                "role":         "tool",
+                "tool_call_id": tc_id,
+                "name":         tc_name,
+                "content":      result,
+            })
+
+    # unreachable, but just in case
+    return messages
+
+
+# ── Prompt builder ────────────────────────────────────────────────────────────
+
+def build_initial_messages(rule_id: str, findings_with_code: list, repo_tree: list[str]) -> list:
+    """
+    Build the initial messages list for the tool-calling conversation.
+    """
     findings_block = ""
     for idx, f in enumerate(findings_with_code, start=1):
-        # Limit full-file context to avoid token overflow
         file_ctx = f["file_content"][:8000]
         if len(f["file_content"]) > 8000:
             file_ctx += "\n... (file truncated for brevity)"
@@ -103,73 +211,78 @@ def build_analysis_prompt(rule_id: str, findings_with_code: list) -> str:
 {f['matched_code']}
 ```
 
-**Full file context (read-only, for taint analysis):**
+**Content of the finding file:**
 ```php
 {file_ctx}
 ```
 """
 
-    return f"""You are a Semgrep triage engine.
-Your job is NOT to perform a security review.
-Your ONLY task is to validate whether the reported Semgrep finding matches the exact taint flow shown in code.
+    tree_block = "\n".join(repo_tree) if repo_tree else "(repo tree unavailable)"
 
-Semgrep triggered rule `{rule_id}` on the following finding(s) in a PHP codebase.
+    system_prompt = f"""You are a Semgrep triage engine with the ability to read any file in the repository.
 
-{findings_block}
+Your ONLY task is to validate whether the reported Semgrep finding represents a real vulnerability
+by tracing the complete taint flow — even if that flow spans multiple files.
 
----
+## How to use your file-reading tool
+- You have access to a `fetch_file` tool. Call it whenever you need to read a file.
+- If the finding file only assigns a tainted value to a variable (e.g. `$html .= ...`) without
+  echoing it, search for the file that includes this one or outputs that variable.
+- Use the repository file tree below to locate candidates, then fetch and read them.
+- You may call `fetch_file` as many times as needed (up to {MAX_TOOL_CALLS} calls total).
+- Stop fetching once you have enough context to reach a confident verdict.
 
-IMPORTANT SCOPE RULES:
-Your analysis scope is STRICTLY LIMITED to the vulnerability type indicated by rule `{rule_id}`. 
-You CAN'T mention any other findings that are not listed inside this specific issue.
+## Repository file tree (all files you can read)
 
-DO NOT:
-- Mention unrelated vulnerabilities.
-- Suggest fixes for other security issues found in the code.
-- Provide proof-of-concept for other vulnerabilities.
-- Mention "however there may be another issue..." or similar language.
-- Expand analysis beyond the reported finding.
+{tree_block}
 
-If the finding is FALSE POSITIVE:
-- Explain ONLY why this finding is false positive.
-- DO NOT provide Fix / PoC / Code Flow.
-- DO NOT suggest unrelated remediation.
+## Scope rules — read carefully
+- Your analysis scope is STRICTLY LIMITED to the vulnerability type indicated by rule `{rule_id}`.
+- You may only report issues that are directly related to the findings listed below.
+- DO NOT mention unrelated vulnerabilities, suggest unrelated fixes, or expand scope.
 
-If the finding is TRUE POSITIVE:
-- Provide Fix / PoC / Code Flow ONLY for THIS finding.
-
----
-
-Analyse every finding carefully and produce the following four sections.
-Be specific, precise, and reference actual variable names, function names, and line numbers from the code above.
+## Output format
+After you finish reading files, produce ONLY these four Markdown sections:
 
 ## Verdict
-State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
-Explain *why* in 2-4 sentences referencing the actual code.
-If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE POSITIVE — ..."). Becareful with the formatting, put new-line between findings.
+TRUE POSITIVE or FALSE POSITIVE for each finding. Reference actual variable names and line numbers.
+If multiple findings, label each (e.g. "Finding 1: TRUE POSITIVE — ..."). Put a newline between findings.
 
 ## Fix
-*(Skip this section entirely if all findings are FALSE POSITIVE.)*
-Provide a concrete fix for each true-positive finding.
-Include a before/after code snippet written in PHP.
+*(Omit entirely if all findings are FALSE POSITIVE.)*
+Concrete before/after PHP code fix for each true-positive finding.
 
 ## Proof of Concept
-*(Skip this section entirely if all findings are FALSE POSITIVE.)*
-Write a realistic, step-by-step PoC showing how an attacker could exploit this vulnerability.
-For web vulnerabilities include the exact HTTP request or browser-side payload.
+*(Omit entirely if all findings are FALSE POSITIVE.)*
+Step-by-step PoC including exact HTTP request or browser payload.
 
 ## Code Flow
-*(Skip this section entirely if all findings are FALSE POSITIVE.)*
-Show taint flow from the user-controlled source to the vulnerable sink,
-referencing actual variable names and line numbers.
-Use a more visual approach using arrows, like a tree from top to bottom.
+*(Omit entirely if all findings are FALSE POSITIVE.)*
+Taint flow from source → sink across all relevant files, using variable names and line numbers.
+Use arrows (→) for a visual tree.
 
----
-Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
+Do not add any commentary outside these four sections.
 """
 
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": f"Semgrep triggered rule `{rule_id}` on these finding(s):\n\n{findings_block}\n\nBegin your analysis. Fetch any additional files you need before writing your verdict."},
+    ]
 
-# Comment formatter
+
+def extract_final_answer(messages: list) -> str:
+    """
+    Extract the last assistant text message (the final answer after all tool calls).
+    """
+    for msg in reversed(messages):
+        if msg.get("role") == "assistant" and not msg.get("tool_calls"):
+            content = msg.get("content", "")
+            if content:
+                return content
+    return "(no answer produced)"
+
+
+# ── Comment formatter ─────────────────────────────────────────────────────────
 
 def format_comment(rule_id: str, analysis_text: str) -> str:
     return f"""## 🤖 AI Security Analysis
@@ -186,6 +299,7 @@ def format_comment(rule_id: str, analysis_text: str) -> str:
 """
 
 
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     print(f"GH_TOKEN present     : {'YES' if GH_TOKEN else 'NO'}")
@@ -202,7 +316,6 @@ def main():
         print("ERROR: Missing REPO")
         sys.exit(1)
 
-    # Load issues created by create_issues.py
     if not os.path.exists(CREATED_ISSUES_FILE):
         print(f"{CREATED_ISSUES_FILE} not found — nothing to analyse.")
         return
@@ -214,7 +327,12 @@ def main():
         print("No issues to analyse.")
         return
 
-    print(f"\nFound {len(issues)} issue(s) to analyse.\n")
+    # Fetch the repo file tree once — shared across all issues
+    print("\nFetching repository file tree ...")
+    repo_tree = fetch_repo_tree()
+    print(f"  {len(repo_tree)} files found in repo.\n")
+
+    print(f"Found {len(issues)} issue(s) to analyse.\n")
 
     for issue in issues:
         issue_number = issue["issue_number"]
@@ -223,7 +341,7 @@ def main():
 
         print(f"─── Issue #{issue_number}  (rule: {rule_id}) ───")
 
-        # Fetch full file content for each finding via GitHub API
+        # Fetch the finding files upfront
         findings_with_code = []
         for finding in findings:
             file_path    = finding["file"]
@@ -242,17 +360,18 @@ def main():
                 "file_content": file_content,
             })
 
-        # Build prompt and query the LLM
-        prompt = build_analysis_prompt(rule_id, findings_with_code)
+        # Build the initial conversation and run the tool-calling loop
+        messages = build_initial_messages(rule_id, findings_with_code, repo_tree)
 
-        print(f"  → Calling AI ...")
+        print(f"  → Starting AI analysis (tool calling enabled) ...")
         try:
-            analysis_text = call_groq(prompt)
+            final_messages = call_groq_with_tools(messages)
+            analysis_text  = extract_final_answer(final_messages)
         except Exception as exc:
             print(f"  ✗ AI call failed: {exc}")
             analysis_text = f"AI analysis could not be completed due to an API error:\n```\n{exc}\n```"
 
-        # Post comment on the GitHub issue
+        # Post the comment
         comment_body = format_comment(rule_id, analysis_text)
         print(f"  → Posting comment on issue #{issue_number} ...")
         try:
