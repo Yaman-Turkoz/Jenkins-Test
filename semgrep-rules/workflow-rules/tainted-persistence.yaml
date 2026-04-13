@@ -1,5 +1,5 @@
 rules:
-  - id: premature-encoding-before-storage
+  - id: incorrect-sanitization
     mode: taint
     languages: [php]
     severity: WARNING
