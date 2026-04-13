@@ -1,26 +1,34 @@
 rules:
-  - id: tainted-persistence
+  - id: premature-encoding-before-storage
     mode: taint
     languages: [php]
-    severity: INFO
+    severity: WARNING
 
     message: >
-      User-controlled data is being stored in persistent storage.
-      Ensure proper output encoding when rendering stored content to prevent Stored XSS.
+      Data is being HTML-encoded before being stored in the database.
+      This is an anti-pattern and can lead to Stored XSS or double-encoding issues.
+      Store raw data and apply encoding at output time instead.
 
+    metadata:
+      category: security
+      cwe: "CWE-79"
+      confidence: HIGH
 
     pattern-sources:
-      - pattern: $_GET[...]
-      - pattern: $_POST[...]
-      - pattern: $_REQUEST[...]
-      - pattern: $_COOKIE[...]
+      - pattern-either:
+          - pattern: $_GET[...]
+          - pattern: $_POST[...]
+          - pattern: $_REQUEST[...]
+          - pattern: $_COOKIE[...]
 
-    pattern-sanitizers:
+    pattern-propagators:
+
       - pattern: htmlspecialchars(...)
       - pattern: htmlentities(...)
       - pattern: json_encode(...)
 
     pattern-sinks:
-      - pattern: mysqli_query(..., $QUERY)
-      - pattern: $PDO->query($QUERY)
-      - pattern: $PDO->exec($QUERY)
+      - pattern-either:
+          - pattern: mysqli_query(..., $QUERY)
+          - pattern: $PDO->query($QUERY)
+          - pattern: $PDO->exec($QUERY)
