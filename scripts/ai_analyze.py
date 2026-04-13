@@ -61,24 +61,21 @@ def fetch_file_content(file_path: str) -> str:
 
 
 def fetch_repo_tree() -> list[str]:
-    """
-    Return a flat list of all file paths in the repo using the Git Trees API.
-    Falls back to an empty list on error.
-    """
     try:
-        # Get default branch HEAD SHA
-        repo_info   = gh_get(f"/repos/{REPO}")
+        repo_info      = gh_get(f"/repos/{REPO}")
         default_branch = repo_info.get("default_branch", "main")
-        branch_data = gh_get(f"/repos/{REPO}/branches/{default_branch}")
-        tree_sha    = branch_data["commit"]["commit"]["tree"]["sha"]
+        branch_data    = gh_get(f"/repos/{REPO}/branches/{default_branch}")
+        tree_sha       = branch_data["commit"]["commit"]["tree"]["sha"]
 
-        # Recursive tree fetch
         tree_data = gh_get(f"/repos/{REPO}/git/trees/{tree_sha}?recursive=1")
+
         return [
             item["path"]
             for item in tree_data.get("tree", [])
-            if item["type"] == "blob"   # files only, no dirs
+            if item["type"] == "blob"
+            and item["path"].endswith((".php", ".js", ".py"))  # ✅ FILTER
         ]
+
     except Exception as exc:
         print(f"  ⚠ Could not fetch repo tree: {exc}")
         return []
@@ -232,7 +229,14 @@ by tracing the complete taint flow — even if that flow spans multiple files.
 - You may call `fetch_file` as many times as needed (up to {MAX_TOOL_CALLS} calls total).
 - Stop fetching once you have enough context to reach a confident verdict.
 
-## Repository file tree (all files you can read)
+## File selection guidance
+- Prefer files that are likely entry points, such as:
+  - index.php
+  - router files
+  - controllers
+  - files that include or require other files
+
+## Repository file tree (filtered)
 
 {tree_block}
 
@@ -242,11 +246,18 @@ by tracing the complete taint flow — even if that flow spans multiple files.
 - DO NOT mention unrelated vulnerabilities, suggest unrelated fixes, or expand scope.
 
 ## Output format
-After you finish reading files, produce ONLY these four Markdown sections:
 
 ## Verdict
-TRUE POSITIVE or FALSE POSITIVE for each finding. Reference actual variable names and line numbers.
-If multiple findings, label each (e.g. "Finding 1: TRUE POSITIVE — ..."). Put a newline between findings.
+For EACH finding:
+- State TRUE POSITIVE or FALSE POSITIVE
+- You MUST explicitly identify the SINK:
+  - Sink variable
+  - Sink function (e.g. echo, print, response.write, etc.)
+  - Exact file path and line number where the sink occurs
+- If the sink is in another file, you MUST name that file
+
+A finding CANNOT be marked as TRUE POSITIVE unless a concrete sink is identified.
+If no sink is found after reasonable exploration, mark it as FALSE POSITIVE.
 
 ## Fix
 *(Omit entirely if all findings are FALSE POSITIVE.)*
@@ -258,10 +269,27 @@ Step-by-step PoC including exact HTTP request or browser payload.
 
 ## Code Flow
 *(Omit entirely if all findings are FALSE POSITIVE.)*
-Taint flow from source → sink across all relevant files, using variable names and line numbers.
-Use arrows (→) for a visual tree.
 
-Do not add any commentary outside these four sections.
+You MUST describe the FULL taint flow including:
+
+- Source (user input)
+- Intermediate variables (if any)
+- Final sink
+
+For EACH step include:
+- Variable name
+- File path
+- Line number
+
+The FINAL step MUST clearly identify the sink.
+
+Example:
+$_GET['q'] (search.php:10)
+→ $query (search.php:12)
+→ $html (renderer.php:8)
+→ echo $html (templates/view.php:42)  ← SINK
+
+Do not add any commentary outside these sections.
 """
 
     return [
