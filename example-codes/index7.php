@@ -1,17 +1,14 @@
 <?php
 
-if (PHP_SAPI === 'cli') {
-    parse_str(implode('&', array_slice($argv, 1)), $_GET);
+header ("X-XSS-Protection: 0");
+
+// Is there any input?
+if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
+	// Get input
+	$name = preg_replace( '/<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i', '', $_GET[ 'name' ] );
+
+	// Feedback for end user
+	$html .= "<pre>Hello {$name}</pre>";
 }
 
-$file_db = new PDO('sqlite:../database/database.sqlite');
-
-if (NULL == $_GET['id']) $_GET['id'] = 1;
-
-$sql = 'SELECT * FROM employees WHERE employeeId = ' . $_GET['id'];
-
-foreach ($file_db->query($sql) as $row) {
-    $employee = $row['LastName'] . " - " . $row['Email'] . "\n";
-
-    echo $employee;
-}
+?>
