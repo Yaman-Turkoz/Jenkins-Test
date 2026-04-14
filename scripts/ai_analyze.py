@@ -138,6 +138,11 @@ If the finding is FALSE POSITIVE:
 If the finding is TRUE POSITIVE:
 - Provide Fix / PoC / Code Flow ONLY for THIS finding.
 
+ASSESMENT RULES:
+- DO NOT accept non foolproof solutions.
+- Functions that can only prevent certain attack types are NOT SAFE.
+- Functions that can only prevent basic attack types are NOT SAFE.
+
 ---
 
 Analyse every finding carefully and produce the following four sections.
