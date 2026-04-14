@@ -163,7 +163,12 @@ For web vulnerabilities include the exact HTTP request or browser-side payload.
 Show taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
 Use a more visual approach using arrows, like a tree from top to bottom.
-
+example:
+    Line 5: $name = $_GET['name'] (user-controlled input)
+        ↓
+    Line 10: ...
+        ↓
+    Line 21: echo $name (vulnerable sink)
 ---
 Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
 """
