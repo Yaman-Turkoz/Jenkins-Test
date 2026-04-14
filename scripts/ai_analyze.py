@@ -138,11 +138,6 @@ If the finding is FALSE POSITIVE:
 If the finding is TRUE POSITIVE:
 - Provide Fix / PoC / Code Flow ONLY for THIS finding.
 
-ASSESMENT RULES:
-- DO NOT accept non foolproof solutions.
-- Functions that can only prevent certain attack types are NOT SAFE.
-- Functions that can only prevent basic attack types are NOT SAFE.
-
 ---
 
 Analyse every finding carefully and produce the following four sections.
@@ -168,12 +163,7 @@ For web vulnerabilities include the exact HTTP request or browser-side payload.
 Show taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
 Use a more visual approach using arrows, like a tree from top to bottom.
-example:
-    Line 3: $name = $_GET['name']
-        ↓
-    Line 10: $name = htmlspecialchars($name)
-        ↓
-    Line 13: curl_init($name)
+
 ---
 Respond **only** with the four Markdown sections above. Do not add any extra commentary outside them.
 """
