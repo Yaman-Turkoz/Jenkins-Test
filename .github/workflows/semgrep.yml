@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: read
+      contents: write        # needed to create branches and commit files
+      pull-requests: write   # needed to open PRs
 
     steps:
       - name: Checkout code
@@ -20,7 +21,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      # run semgrep
+      # Run semgrep, only on diff vs previous commit
       - name: Run Semgrep
         run: |
           pip install semgrep
@@ -30,16 +31,15 @@ jobs:
             --json \
             --output=semgrep-report.json || true
 
-      # open issues for semgrep findings
-      # writes created-issues.json for the ai
+      # Open one GitHub Issue per rule that has findings.
+      # Writes created-issues.json consumed by the next two steps.
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: python3 scripts/create_issues.py
 
-      # posts a comment on each opened issue
-      # read created-issues.json, fetches source files via GitHub API and comments: verdict, fix, PoC, and code flow.
+      # Post a comment on each issue: verdict, fix advice, PoC, code flow.
       - name: AI Analysis — comment on issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,7 +47,16 @@ jobs:
           REPO: ${{ github.repository }}
         run: python3 scripts/ai_analyze.py
 
-      # artifacts
+      # For every true-positive finding: create a fix branch, commit the
+      # patched file, open a PR, and link it back to the issue.
+      # A human must review and merge — nothing is auto-merged.
+      - name: AI Fix — open PRs for true positives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          REPO: ${{ github.repository }}
+        run: python3 scripts/ai_fix.py
+
       - name: Upload reports
         uses: actions/upload-artifact@v4
         if: always()
