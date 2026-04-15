@@ -17,7 +17,6 @@ GITHUB_API = "https://api.github.com"
 CREATED_ISSUES_FILE = "created-issues.json"
 
 
-# ── GitHub API helpers ────────────────────────────────────────────────────────
 
 def _gh_headers() -> dict:
     return {
@@ -106,7 +105,7 @@ def post_issue_comment(issue_number: int, body: str) -> None:
     gh_post(f"/repos/{REPO}/issues/{issue_number}/comments", {"body": body})
 
 
-# ── Groq helper ───────────────────────────────────────────────────────────────
+# groq helper
 
 def call_groq(prompt: str, max_tokens: int = 4096) -> str:
     payload = {
@@ -131,7 +130,7 @@ def call_groq(prompt: str, max_tokens: int = 4096) -> str:
     return raw["choices"][0]["message"]["content"]
 
 
-# ── Prompt & response parsing ─────────────────────────────────────────────────
+# prompt, response parse
 
 def build_fix_prompt(rule_id: str, findings_with_code: list) -> str:
     findings_block = ""
@@ -208,7 +207,6 @@ def parse_fix_response(response: str) -> dict:
     return {"verdict": "UNKNOWN"}
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     print(f"GH_TOKEN present     : {'YES' if GH_TOKEN else 'NO'}")
