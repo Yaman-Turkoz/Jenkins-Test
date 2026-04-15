@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: write        # needed to create branches and commit files
-      pull-requests: write   # needed to open PRs
+      contents: write      
+      pull-requests: write  
 
     steps:
       - name: Checkout code
@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      # Run semgrep, only on diff vs previous commit
+   
       - name: Run Semgrep
         run: |
           pip install semgrep
@@ -31,15 +31,14 @@ jobs:
             --json \
             --output=semgrep-report.json || true
 
-      # Open one GitHub Issue per rule that has findings.
-      # Writes created-issues.json consumed by the next two steps.
+     
       - name: Create GitHub Issues for findings
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: python3 scripts/create_issues.py
 
-      # Post a comment on each issue: verdict, fix advice, PoC, code flow.
+     
       - name: AI Analysis — comment on issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,9 +46,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: python3 scripts/ai_analyze.py
 
-      # For every true-positive finding: create a fix branch, commit the
-      # patched file, open a PR, and link it back to the issue.
-      # A human must review and merge — nothing is auto-merged.
+     
       - name: AI Fix — open PRs for true positives
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
