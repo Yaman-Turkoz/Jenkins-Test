@@ -172,8 +172,8 @@ For web vulnerabilities include the exact HTTP request or browser-side payload.
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
 Show taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
-Wrap ALL code lines in ```php code blocks and preserve them exactly.
-Don't put any comments, don't explain the code.
+Only for this part: Wrap ALL code lines in ```php code blocks and preserve them exactly.
+Only for this part: Don't put any comments, don't explain the code for.
 Use a more visual approach using arrows, like a tree from top to bottom.
 example:
     Line 3: $name = $_GET['name']
