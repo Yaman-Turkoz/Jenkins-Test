@@ -162,6 +162,7 @@ If multiple findings exist, give a verdict for each one (e.g. "Finding 1: TRUE P
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
 Provide a concrete fix for each true-positive finding.
 Include a before/after code snippet written in PHP.
+Write the codes in this part in a single box.
 
 ## Proof of Concept
 *(Skip this section entirely if all findings are FALSE POSITIVE.)*
@@ -174,6 +175,7 @@ Show taint flow from the user-controlled source to the vulnerable sink,
 referencing actual variable names and line numbers.
 Only for this part: Wrap ALL code lines in ```php code blocks and preserve them exactly.
 Only for this part: Don't put any comments, don't explain the code for.
+Write the codes in this part in a single box.
 Use a more visual approach using arrows, like a tree from top to bottom.
 example:
     Line 3: $name = $_GET['name']
