@@ -1,15 +1,14 @@
 <?php
 
+header ("X-XSS-Protection: 0");
 
-$name = $_GET['name'];
-echo('Hello ' . $name);
+// Is there any input?
+if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
+	// Get input
+	$name = preg_replace( '/<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i', '', $_GET[ 'name' ] );
 
-$id = $_POST['id'];
-mysql_query("SELECT user FROM users WHERE id = " . $id);
+	// Feedback for end user
+	$html .= "<pre>Hello {$name}</pre>";
+}
 
-
-$cmd = $_COOKIE['cmd'];
-exec("cat /var/log/apache2/access.log | grep " . $cmd);
-
-
-$words = split(":", "split:this");
+?>
