@@ -123,6 +123,16 @@ IMPORTANT SCOPE RULES:
 Your analysis scope is STRICTLY LIMITED to the vulnerability type indicated by rule `{rule_id}`. 
 You CAN'T mention any other findings that are not listed inside this specific issue.
 
+SANITIZATION RULES:
+
+- Not all filtering functions are considered safe.
+- Weak or partial sanitization (e.g., regex-based filtering, blacklist approaches like preg_replace removing <script> tags) MUST be treated as INSUFFICIENT.
+- Such cases MUST be classified as TRUE POSITIVE.
+
+- Only strong, context-aware output encoding functions (e.g., htmlspecialchars in PHP for HTML context) are considered valid protection.
+
+- If user-controlled data reaches HTML output and is not protected by a proper encoding function like htmlspecialchars, it MUST be considered a TRUE POSITIVE, even if some filtering exists.
+
 DO NOT:
 - Mention unrelated vulnerabilities.
 - Suggest fixes for other security issues found in the code.
