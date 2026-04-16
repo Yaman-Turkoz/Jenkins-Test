@@ -1,30 +1,14 @@
 <?php
 
-$name    = $_GET['name'];
-$command = $_GET['cmd'];
-$code    = $_GET['code'];
-$asd;
+header ("X-XSS-Protection: 0");
 
-echo $code;
+// Is there any input?
+if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
+	// Get input
+	$name = preg_replace( '/<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i', '', $_GET[ 'name' ] );
 
-echo $command;
+	// Feedback for end user
+	$html .= "<pre>Hello {$name}</pre>";
+}
 
-var_dump($name);
-
-
-eval($code);
-
-$output = shell_exec($command);
-
-echo $output;
-
-$name = htmlspecialchars($name);
-echo $name;
-
-curl_init($name);
-curl_init($code);
-curl_init($asd);
-
-echo $name; 
-echo $code;
-curl_init($command);
+?>
