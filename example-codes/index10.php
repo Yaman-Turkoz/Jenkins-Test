@@ -10,6 +10,14 @@ echo $name;
 
 echo $code;
 
-curl_init($name);
+// Validate $name to prevent SSRF
+$allowedHosts = array('http://example.com', 'https://example.com');
+if (in_array($name, $allowedHosts)) {
+    curl_init($name);
+} else {
+    echo "Invalid URL";
+}
 
-curl_init($asd);
+// $asd is not defined, this will cause an error
+// curl_init($asd);
+
