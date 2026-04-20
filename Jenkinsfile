@@ -58,6 +58,7 @@ pipeline {
                     sh """
                         docker run --rm \\
                             -v ${hostWorkspace}:/src \\
+                            -v /var/run/docker.sock:/var/run/docker.sock \\
                             semgrep/semgrep \\
                             semgrep scan /src \\
                             --config=/src/semgrep-rules/xss.yaml \\
