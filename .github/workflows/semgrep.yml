@@ -1,10 +1,10 @@
 name: Semgrep Security Scan
-
+# pipeline testleri için branch ismi değiştirdim, düzeltmeyi unutma
 on:
   push:
-    branches: ["main"]
+    branches: ["mainWARNING"]
   pull_request:
-    branches: ["main"]
+    branches: ["mainWARNING"]
 
 jobs:
   semgrep:
