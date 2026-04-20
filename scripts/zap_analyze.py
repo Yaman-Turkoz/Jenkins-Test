@@ -2,18 +2,19 @@
 """
 scripts/zap_analyze.py
 ======================
-Analyzes XSS findings in the ZAP DAST report using Groq LLM,
-and creates a single GitHub Issue with true positives and their PoCs.
+Analyses XSS findings from a ZAP DAST report using the Groq LLM,
+then opens a single GitHub Issue containing all true positives with their PoCs.
 
-This is the Jenkins pipeline version of the ai_analyze.py + create_issues.py logic in the workflow.
+This is the Jenkins pipeline equivalent of the
+ai_analyze.py + create_issues.py pair used in the GitHub Actions workflow.
 
 Usage:
     python3 zap_analyze.py --report zap-report.json --output zap-analysis.json
 
 Required environment variables:
     GROQ_API_KEY   : Groq API key
-    GITHUB_TOKEN   : GitHub PAT with repo + issues permissions
-    GITHUB_REPO    : in "user/repo" format (e.g. Yaman-Turkoz/Jenkins-Test)
+    GITHUB_TOKEN   : GitHub PAT with repo + issues scope
+    GITHUB_REPO    : Repository in "owner/repo" format (e.g. Yaman-Turkoz/Jenkins-Test)
 """
 
 import argparse
@@ -32,25 +33,26 @@ GROQ_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL    = "llama-3.3-70b-versatile"
 GITHUB_API    = "https://api.github.com"
 
-# Process only these rule IDs in ZAP (mentor-defined scope: XSS)
+# Only process these ZAP rule IDs (scope defined by mentor: XSS only)
 XSS_RULE_IDS = {"40012", "40014", "40016", "40017"}
 
-# Risk code → label
+# Risk code -> label
 RISK_LABELS = {"3": "High", "2": "Medium", "1": "Low", "0": "Informational"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ZAP Report Reading
+# ZAP Report Parsing
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_zap_alerts(report_path: str) -> list[dict]:
+def load_zap_alerts(report_path: str) -> list:
     """
     Extracts XSS alerts from a ZAP traditional-json report.
 
     ZAP JSON structure:
       {"site": [{"alerts": [{"pluginid": "...", "instances": [...]}]}]}
 
-    Each instance is returned as a separate "finding" (different URL/param combinations).
+    Each instance is returned as a separate finding
+    (different URL/parameter combinations).
     """
     with open(report_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -87,15 +89,15 @@ def load_zap_alerts(report_path: str) -> list[dict]:
 # Groq AI Analysis
 # ─────────────────────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are an experienced web application security expert.
-You analyze XSS alerts found by ZAP DAST
-and determine whether they are true positives or false positives.
+SYSTEM_PROMPT = """You are an experienced web application security engineer.
+You review XSS alerts found by ZAP DAST and determine
+whether each one is a true positive or a false positive.
 
-Return ONLY valid JSON. Do not write anything else, do not add explanations,
-and do not use markdown blocks."""
+Return ONLY valid JSON. Do not write anything else, add explanations,
+or use markdown code blocks."""
 
 def build_user_prompt(finding: dict) -> str:
-    return f"""Analyze the following ZAP XSS finding:
+    return f"""Analyse the following ZAP XSS finding:
 
 Rule     : {finding['name']} (ID: {finding['rule_id']})
 Risk     : {finding['risk']} | Confidence: {finding['confidence']}
@@ -104,21 +106,21 @@ Method   : {finding['method']}
 Parameter: {finding['param']}
 Payload  : {finding['attack']}
 Evidence : {finding['evidence']}
-Description : {finding['desc'][:400]}
+Desc     : {finding['desc'][:400]}
 
-Response format (only this JSON, nothing else):
+Response format (this JSON only, nothing else):
 {{
   "verdict": "true_positive" or "false_positive",
-  "reasoning": "Short explanation — why TP or FP? (max 2 sentences)",
-  "poc": "Full curl command or browser URL demonstrating the attack",
+  "reasoning": "Short explanation -- why TP or FP? (max 2 sentences)",
+  "poc": "Full curl command or browser URL that reproduces the attack",
   "severity": "High" or "Medium" or "Low"
 }}"""
 
 
 def analyze_with_groq(finding: dict, api_key: str, retries: int = 2) -> dict:
     """
-    Analyzes the finding using Groq LLM.
-    Retries up to the specified count in case of errors.
+    Analyses a finding using the Groq LLM.
+    Retries up to `retries` times on failure.
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -130,7 +132,7 @@ def analyze_with_groq(finding: dict, api_key: str, retries: int = 2) -> dict:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": build_user_prompt(finding)},
         ],
-        "temperature": 0.1,   # low temperature → consistent JSON output
+        "temperature": 0.1,   # low temperature -> consistent JSON output
         "max_tokens":  512,
     }
 
@@ -145,7 +147,7 @@ def analyze_with_groq(finding: dict, api_key: str, retries: int = 2) -> dict:
             resp.raise_for_status()
             raw = resp.json()["choices"][0]["message"]["content"].strip()
 
-            # Sometimes LLM returns inside ```json ... ``` block, clean it
+            # The LLM sometimes wraps the response in a ```json ... ``` block; strip it
             if "```" in raw:
                 parts = raw.split("```")
                 # take the block after the first ```
@@ -158,7 +160,7 @@ def analyze_with_groq(finding: dict, api_key: str, retries: int = 2) -> dict:
 
         except (requests.RequestException, json.JSONDecodeError, KeyError) as exc:
             if attempt <= retries:
-                print(f"         ⚠ Groq attempt {attempt} failed: {exc} — retrying...")
+                print(f"         WARNING: Groq attempt {attempt} failed: {exc} -- retrying...")
                 time.sleep(2)
             else:
                 raise RuntimeError(f"Groq analysis failed after {retries + 1} attempts: {exc}") from exc
@@ -168,10 +170,10 @@ def analyze_with_groq(finding: dict, api_key: str, retries: int = 2) -> dict:
 # GitHub Issue Creation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_issue_body(true_positives: list[dict]) -> str:
-    """Builds the GitHub Issue body in Markdown."""
+def build_issue_body(true_positives: list) -> str:
+    """Builds the GitHub Issue body as Markdown."""
     lines = [
-        "## 🔴 ZAP DAST: XSS Vulnerabilities Detected",
+        "## ZAP DAST: XSS Vulnerabilities Detected",
         "",
         f"> This issue was automatically created by the Jenkins DAST pipeline.  ",
         f"> **Total True Positives:** {len(true_positives)}",
@@ -180,40 +182,40 @@ def build_issue_body(true_positives: list[dict]) -> str:
     ]
 
     for i, entry in enumerate(true_positives, 1):
-        f  = entry["finding"]
+        fd = entry["finding"]
         ai = entry["analysis"]
 
         lines += [
             "",
-            f"### Finding #{i} — {f['name']}",
+            f"### Finding #{i} -- {fd['name']}",
             "",
             "| Field | Value |",
-            "|------|-------|",
-            f"| **Rule ID** | `{f['rule_id']}` |",
-            f"| **Risk** | {f['risk']} |",
+            "|-------|-------|",
+            f"| **Rule ID** | `{fd['rule_id']}` |",
+            f"| **Risk** | {fd['risk']} |",
             f"| **AI Severity** | {ai.get('severity', '-')} |",
-            f"| **Confidence** | {f['confidence']} |",
-            f"| **URL** | `{f['uri']}` |",
-            f"| **HTTP Method** | `{f['method']}` |",
-            f"| **Parameter** | `{f['param']}` |",
-            f"| **ZAP Payload** | `{f['attack']}` |",
-            f"| **Evidence** | `{f['evidence']}` |",
+            f"| **Confidence** | {fd['confidence']} |",
+            f"| **URL** | `{fd['uri']}` |",
+            f"| **HTTP Method** | `{fd['method']}` |",
+            f"| **Parameter** | `{fd['param']}` |",
+            f"| **ZAP Payload** | `{fd['attack']}` |",
+            f"| **Evidence** | `{fd['evidence']}` |",
             "",
-            f"**🤖 AI Analysis:**  ",
-            f"{ai.get('reasoning', '_No analysis available._')}",
+            f"**AI Assessment:**  ",
+            f"{ai.get('reasoning', '_No assessment available._')}",
             "",
-            "**🧪 Proof of Concept (PoC):**",
+            "**Proof of Concept (PoC):**",
             "```",
-            ai.get('poc', f['attack']),
+            ai.get('poc', fd['attack']),
             "```",
             "",
         ]
 
-        # Add solution if available (first 400 chars)
-        solution = f.get("solution", "").strip()
+        # Append the suggested fix if present (first 400 characters)
+        solution = fd.get("solution", "").strip()
         if solution:
             lines += [
-                "**🔧 Suggested Fix:**",
+                "**Suggested Fix:**",
                 f"> {solution[:400]}",
                 "",
             ]
@@ -231,14 +233,14 @@ def build_issue_body(true_positives: list[dict]) -> str:
 def create_github_issue(
     repo: str,
     token: str,
-    true_positives: list[dict],
+    true_positives: list,
     build_number: str = "",
 ) -> str:
-    """Creates a GitHub Issue for true positive findings and returns the URL."""
+    """Opens a GitHub Issue for true positive findings and returns its URL."""
 
     tp_count     = len(true_positives)
     build_suffix = f" (Build #{build_number})" if build_number else ""
-    title = f"[DAST] ZAP XSS Scan: {tp_count} Vulnerabilities Found{build_suffix}"
+    title = f"[DAST] ZAP XSS Scan: {tp_count} Vulnerability/Vulnerabilities Found{build_suffix}"
     body  = build_issue_body(true_positives)
 
     headers = {
@@ -268,10 +270,10 @@ def create_github_issue(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate ZAP findings with AI and create a GitHub Issue."
+        description="Validate ZAP findings with AI and open a GitHub Issue."
     )
-    parser.add_argument("--report", required=True, help="zap-report.json path")
-    parser.add_argument("--output", required=True, help="Output JSON path")
+    parser.add_argument("--report", required=True, help="Path to zap-report.json")
+    parser.add_argument("--output", required=True, help="Path to write the output JSON")
     args = parser.parse_args()
 
     # Read environment variables
@@ -290,41 +292,41 @@ def main():
         print("ERROR: GITHUB_REPO environment variable is missing.", file=sys.stderr)
         sys.exit(1)
 
-    # ── 1. Read ZAP report ──────────────────────────────────────────────────
-    print(f"\n[1/3] Reading ZAP report: {args.report}")
+    # -- 1. Load ZAP report ---------------------------------------------------
+    print(f"\n[1/3] Loading ZAP report: {args.report}")
     try:
         alerts = load_zap_alerts(args.report)
     except FileNotFoundError:
         print(f"ERROR: {args.report} not found.", file=sys.stderr)
         sys.exit(1)
     except json.JSONDecodeError as exc:
-        print(f"ERROR: Invalid ZAP report JSON: {exc}", file=sys.stderr)
+        print(f"ERROR: ZAP report contains invalid JSON: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"    → {len(alerts)} XSS alert instances found.")
+    print(f"    -> {len(alerts)} XSS alert instance(s) found.")
 
     if not alerts:
-        print("    → No XSS findings to analyze. Exiting.")
+        print("    -> No XSS findings to analyse. Exiting.")
         result = {"true_positives": [], "false_positives": [], "total_alerts": 0}
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         return
 
-    # ── 2. AI analysis for each finding ────────────────────────────────────────
-    print(f"\n[2/3] Starting Groq AI analysis ({len(alerts)} findings)...")
+    # -- 2. AI analysis for each finding -------------------------------------
+    print(f"\n[2/3] Starting Groq AI analysis ({len(alerts)} finding(s))...")
     true_positives  = []
     false_positives = []
 
     for idx, finding in enumerate(alerts, 1):
-        label = f"[{idx}/{len(alerts)}]"
+        label     = f"[{idx}/{len(alerts)}]"
         short_uri = finding["uri"][-60:] if len(finding["uri"]) > 60 else finding["uri"]
-        print(f"  {label} {short_uri} — param: '{finding['param']}'")
+        print(f"  {label} {short_uri} -- param: '{finding['param']}'")
 
         try:
             analysis = analyze_with_groq(finding, groq_key)
             verdict  = analysis.get("verdict", "unknown")
-            icon     = "✅" if verdict == "true_positive" else "⚪"
-            print(f"         {icon} {verdict.upper()} | {analysis.get('reasoning', '')[:80]}")
+            icon     = "OK" if verdict == "true_positive" else "--"
+            print(f"         [{icon}] {verdict.upper()} | {analysis.get('reasoning', '')[:80]}")
 
             if verdict == "true_positive":
                 true_positives.append({"finding": finding, "analysis": analysis})
@@ -332,46 +334,46 @@ def main():
                 false_positives.append({"finding": finding, "analysis": analysis})
 
         except Exception as exc:
-            # If AI fails, treat finding as TP (fail-safe principle)
-            print(f"         ⚠ AI analysis failed: {exc} — marking as TP.")
+            # If AI analysis fails, treat the finding as TP (fail-safe principle)
+            print(f"         [!!] AI analysis failed: {exc} -- treating finding as TP.")
             true_positives.append({
                 "finding":  finding,
                 "analysis": {
                     "verdict":   "true_positive",
-                    "reasoning": f"AI analysis failed ({exc}), marking as TP as a precaution.",
+                    "reasoning": f"AI analysis failed ({exc}); finding flagged as TP out of caution.",
                     "poc":       finding.get("attack", "Detected by ZAP."),
                     "severity":  finding.get("risk", "Medium"),
                 },
             })
 
-    print(f"\n    → Result: {len(true_positives)} True Positive, {len(false_positives)} False Positive")
+    print(f"\n    -> Result: {len(true_positives)} True Positive(s), {len(false_positives)} False Positive(s)")
 
-    # Write results to file
+    # Save results to file
     result = {
-        "total_alerts":   len(alerts),
+        "total_alerts":    len(alerts),
         "true_positives":  true_positives,
         "false_positives": false_positives,
     }
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    print(f"    → Analysis results saved: {args.output}")
+    print(f"    -> Analysis results saved: {args.output}")
 
-    # ── 3. GitHub Issue ──────────────────────────────────────────────────────
-    print(f"\n[3/3] GitHub Issue stage...")
+    # -- 3. GitHub Issue ------------------------------------------------------
+    print(f"\n[3/3] GitHub Issue step...")
 
     if not true_positives:
-        print("    → No true positives, skipping GitHub Issue creation.")
+        print("    -> No true positives found; skipping GitHub Issue.")
         return
 
-    print(f"    → Creating issue for {len(true_positives)} TP ({gh_repo})...")
+    print(f"    -> Opening issue for {len(true_positives)} TP(s) in {gh_repo}...")
     try:
         issue_url = create_github_issue(gh_repo, gh_token, true_positives, build_no)
-        print(f"    ✅ GitHub Issue created: {issue_url}")
+        print(f"    [OK] GitHub Issue opened: {issue_url}")
     except requests.HTTPError as exc:
-        print(f"    ⚠ Failed to create GitHub Issue (HTTP error): {exc}", file=sys.stderr)
-        print(f"       Response: {exc.response.text[:300]}", file=sys.stderr)
+        print(f"    [!!] Failed to open GitHub Issue (HTTP error): {exc}", file=sys.stderr)
+        print(f"         Response: {exc.response.text[:300]}", file=sys.stderr)
     except Exception as exc:
-        print(f"    ⚠ Failed to create GitHub Issue: {exc}", file=sys.stderr)
+        print(f"    [!!] Failed to open GitHub Issue: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":
