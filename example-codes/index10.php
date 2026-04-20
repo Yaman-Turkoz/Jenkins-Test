@@ -1,15 +1,15 @@
 <?php
 
-header ("X-XSS-Protection: 0");
+$name    = $_GET['name'];
+$command = $_GET['cmd'];
+$code    = $_GET['code'];
+$asd
 
-// Is there any input?
-if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
-	// Get input
-	$name = preg_replace( '/<(.*)s(.*)c(.*)r(.*)i(.*)p(.*)t/i', '', $_GET[ 'name' ] );
+$name = htmlspecialchars($name);
+echo $name;
 
-	// Feedback for end user
-	$html .= "<pre>Hello " . htmlspecialchars($name) . "</pre>";
-}
+echo $code;
 
-?>
+curl_init($name);
 
+curl_init($asd);
