@@ -1,3 +1,30 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// @NonCPS Helper Methods
+//
+// Jenkins CPS (Continuation Passing Style) engine serializes the pipeline
+// state to disk between steps. groovy.json.JsonSlurper and the LazyMap/LazyList
+// objects it produces are NOT serializable, which causes a
+// NotSerializableException if they are kept as live variables across steps.
+//
+// @NonCPS methods are excluded from CPS serialization entirely.
+// They must be fast, side-effect-free, and return only serializable types
+// (primitives like int, String, boolean).
+// ─────────────────────────────────────────────────────────────────────────────
+
+@NonCPS
+int countSemgrepFindings(String reportText) {
+    def report = new groovy.json.JsonSlurper().parseText(reportText)
+    return report.results.size()
+}
+
+@NonCPS
+int countZapAlerts(String reportText) {
+    def report = new groovy.json.JsonSlurper().parseText(reportText)
+    return report.site?.collectMany { it.alerts ?: [] }?.size() ?: 0
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 pipeline {
     agent any
 
@@ -61,8 +88,7 @@ pipeline {
                     def reportText = readFile('semgrep-report.json').trim()
                     if (!reportText) error("Semgrep report is empty — scan may have failed.")
 
-                    def report   = new groovy.json.JsonSlurper().parseText(reportText)
-                    def findings = report.results.size()
+                    def findings = countSemgrepFindings(reportText)
 
                     if (findings > 0) {
                         echo "Semgrep: ${findings} critical finding(s) detected."
@@ -307,10 +333,7 @@ jobs:
                         writeFile file: 'zap-report.json', text: '{"site":[]}'
                     }
 
-                    def zapReport = new groovy.json.JsonSlurper().parseText(
-                        readFile('zap-report.json')
-                    )
-                    def totalAlerts = zapReport.site?.collectMany { it.alerts ?: [] }?.size() ?: 0
+                    def totalAlerts = countZapAlerts(readFile('zap-report.json'))
                     echo "ZAP scan complete — ${totalAlerts} alert(s) found."
                 }
             }
