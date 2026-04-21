@@ -251,8 +251,8 @@ env:
         loginRequestData: "username={%username%}&password={%password%}&Login=Login"
       verification:
         method: response
-        loggedInRegex: "(?i)(welcome|logout|dvwa security)"
-        loggedOutRegex: "(?i)(login|sign in)"
+        loggedInRegex: "(?i)(logout|DVWA Security|Welcome)"
+        loggedOutRegex: "(?i)(login\\.php|Login)"
     sessionManagement:
       method: cookie
     users:
