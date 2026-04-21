@@ -15,19 +15,6 @@ int countZapAlerts(String reportText) {
 pipeline {
     agent any
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Environment Variables
-    //
-    // BUILD_NUMBER is appended to network and container names so that
-    // multiple concurrent pipeline runs never collide.
-    //
-    // Required Jenkins credentials:
-    //   - "groq-api-key"  : Secret text  → Groq API key
-    //   - "github-token"  : Secret text  → GitHub PAT with repo + issues scope
-    //
-    // HOST_JENKINS_HOME is only needed for ZAP (volume mount into container).
-    // Semgrep runs directly inside Jenkins — no Docker, no volume needed.
-    // ─────────────────────────────────────────────────────────────────────────
     environment {
         NET_NAME     = "devsecops-net-${BUILD_NUMBER}"
         DVWA_NAME    = "dvwa-${BUILD_NUMBER}"
@@ -42,21 +29,16 @@ pipeline {
 
     stages {
 
-        // ─────────────────────────────────────────────────────────────────────
         stage('Clean Workspace') {
             steps { deleteDir() }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('Checkout') {
             steps { checkout scm }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // SAST — Semgrep runs directly inside Jenkins (pip install semgrep
-        // was done in the Dockerfile). No Docker socket needed here.
-        // --baseline-commit HEAD~1 → only findings introduced by this commit.
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('Semgrep Scan') {
             steps {
                 script {
@@ -83,25 +65,14 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 1: Start and prepare DVWA
-        //
-        // Steps:
-        //   1. Create a build-specific Docker network
-        //   2. Start the DVWA container on that network
-        //   3. Wait until DVWA responds with HTTP 200/302 (max ~2 minutes)
-        //   4. Set default_security_level to "low" in the DVWA PHP config
-        //   5. Initialize the DB and log in via curl to confirm everything works
-        //   6. (Debug) Verify the XSS page is reachable while authenticated
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('DAST: Start DVWA') {
             steps {
                 script {
 
-                    // 1. Create the Docker network
                     sh "docker network create ${NET_NAME}"
 
-                    // 2. Start DVWA
+
                     sh """
                         docker run -d \\
                             --name ${DVWA_NAME} \\
@@ -109,7 +80,7 @@ pipeline {
                             vulnerables/web-dvwa
                     """
 
-                    // 3. Wait until DVWA is ready
+
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -131,10 +102,9 @@ pipeline {
                             '
                     """
 
-                    // 4. Set security level to "low" in the PHP config file
                     sh """docker exec ${DVWA_NAME} sed -i "s/default_security_level' ] = '[^']*'/default_security_level' ] = 'low'/" /var/www/html/config/config.inc.php 2>/dev/null || true"""
 
-                    // 5. DB init + login + set security level via curl
+
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -181,30 +151,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 2: ZAP XSS scan
-        //
-        // Key fixes vs previous version:
-        //
-        //   Authentication:
-        //     DVWA uses a CSRF token (user_token) on the login form.
-        //     ZAP's built-in form auth handles CSRF tokens automatically
-        //     when the token name is listed under antiCsrfTokenNames.
-        //     We keep the form auth approach but move antiCsrfTokenNames
-        //     under the context (not under env.parameters where ZAP ignores it).
-        //
-        //   Spider:
-        //     Added ajaxSpider after the traditional spider to discover
-        //     JavaScript-rendered links inside the authenticated DVWA session.
-        //     The traditional spider alone misses most /vulnerabilities/ pages.
-        //
-        //   Active Scan policy:
-        //     "defaultStrength: disabled" is not a valid ZAP value and was
-        //     silently ignored.  The correct way to suppress all other rules
-        //     is "defaultThreshold: off" — this disables every rule that is
-        //     not explicitly listed below.  The four XSS rules are given
-        //     explicit strength/threshold values so they run normally.
-        // ─────────────────────────────────────────────────────────────────────
+    
         stage('DAST: ZAP XSS Scan') {
             steps {
                 script {
@@ -332,19 +279,6 @@ jobs:
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 3: AI validation and GitHub Issue
-        //
-        // scripts/zap_analyze.py:
-        //   1. Extracts XSS findings (rule IDs 40012/40014/40016/40017) from
-        //      zap-report.json
-        //   2. Asks Groq LLM for each finding: true or false positive?
-        //   3. Writes all true positives with their PoCs into a single GitHub Issue
-        //   4. Saves full results to zap-analysis.json
-        //
-        // --network host → Python container needs internet for Groq + GitHub APIs.
-        // BUILD_NUMBER is passed so the GitHub Issue title includes the build no.
-        // ─────────────────────────────────────────────────────────────────────
         stage('DAST: AI Analysis & GitHub Issue') {
             steps {
                 script {
@@ -374,9 +308,6 @@ jobs:
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Post Actions — runs on every outcome (success, failure, abort)
-    // ─────────────────────────────────────────────────────────────────────────
     post {
         always {
             sh """
