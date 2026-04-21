@@ -248,11 +248,11 @@ env:
       method: form
       parameters:
         loginPageUrl: "http://${DVWA_NAME}/login.php"
-        loginRequestData: "username={%username%}&password={%password%}&Login=Login"
+        loginRequestData: "username={%username%}&password={%password%}&Login=Login&user_token={%user_token%}"
       verification:
         method: response
         loggedInRegex: "(?i)(logout|DVWA Security|Welcome)"
-        loggedOutRegex: "(?i)(login\\.php|Login)"
+        loggedOutRegex: "(?i)(login.php|Login)"
     sessionManagement:
       method: cookie
     users:
@@ -264,6 +264,8 @@ env:
     failOnError: false
     failOnWarning: false
     progressToStdout: true
+    antiCsrfTokenNames:
+    - user_token
 
 jobs:
 - type: spider
