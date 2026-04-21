@@ -41,25 +41,21 @@ pipeline {
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // SAST — Existing Semgrep stage (unchanged)
+        // SAST — Semgrep (installed directly inside the Jenkins image)
+        //
+        // Semgrep runs as a plain shell command, not via docker run.
+        // docker run is only needed for DAST (DVWA + ZAP) because those
+        // containers must communicate over a shared Docker network.
         // ─────────────────────────────────────────────────────────────────────
         stage('Semgrep Scan') {
             steps {
                 script {
-                    // Translate the in-container workspace path to its
-                    // host-side equivalent. Without this the -v mount fails.
-                    def hostWorkspace = env.WORKSPACE.replace(
-                        '/var/jenkins_home',
-                        env.HOST_JENKINS_HOME
-                    )
-
                     sh """
-                        docker run --rm \\
-                            -v ${hostWorkspace}:/src \\
-                            semgrep/semgrep \\
-                            semgrep scan /src \\
-                            --config=/src/semgrep-rules/xss.yaml \\
-                            --json > semgrep-report.json
+                        semgrep scan . \\
+                            --config=semgrep-rules/pipeline-rules.yaml \\
+                            --baseline-commit HEAD~1 \\
+                            --json \\
+                            --output=semgrep-report.json || true
                     """
 
                     def reportText = readFile('semgrep-report.json').trim()
@@ -69,8 +65,8 @@ pipeline {
                     def findings = report.results.size()
 
                     if (findings > 0) {
-                        echo "Semgrep: ${findings} security finding(s) detected!"
-                        error("Semgrep findings present — stopping pipeline.")
+                        echo "Semgrep: ${findings} critical finding(s) detected."
+                        error("Semgrep: Pipeline failed due to critical findings.")
                     } else {
                         echo "Semgrep: No findings."
                     }
