@@ -1,5 +1,3 @@
-
-
 @NonCPS
 int countSemgrepFindings(String reportText) {
     def report = new groovy.json.JsonSlurper().parseText(reportText)
@@ -17,6 +15,19 @@ int countZapAlerts(String reportText) {
 pipeline {
     agent any
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Environment Variables
+    //
+    // BUILD_NUMBER is appended to network and container names so that
+    // multiple concurrent pipeline runs never collide.
+    //
+    // Required Jenkins credentials:
+    //   - "groq-api-key"  : Secret text  → Groq API key
+    //   - "github-token"  : Secret text  → GitHub PAT with repo + issues scope
+    //
+    // HOST_JENKINS_HOME is only needed for ZAP (volume mount into container).
+    // Semgrep runs directly inside Jenkins — no Docker, no volume needed.
+    // ─────────────────────────────────────────────────────────────────────────
     environment {
         NET_NAME     = "devsecops-net-${BUILD_NUMBER}"
         DVWA_NAME    = "dvwa-${BUILD_NUMBER}"
@@ -31,16 +42,21 @@ pipeline {
 
     stages {
 
-
+        // ─────────────────────────────────────────────────────────────────────
         stage('Clean Workspace') {
             steps { deleteDir() }
         }
 
-
+        // ─────────────────────────────────────────────────────────────────────
         stage('Checkout') {
             steps { checkout scm }
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // SAST — Semgrep runs directly inside Jenkins (pip install semgrep
+        // was done in the Dockerfile). No Docker socket needed here.
+        // --baseline-commit HEAD~1 → only findings introduced by this commit.
+        // ─────────────────────────────────────────────────────────────────────
         stage('Semgrep Scan') {
             steps {
                 script {
@@ -67,13 +83,25 @@ pipeline {
             }
         }
 
-
+        // ─────────────────────────────────────────────────────────────────────
+        // DAST Stage 1: Start and prepare DVWA
+        //
+        // Steps:
+        //   1. Create a build-specific Docker network
+        //   2. Start the DVWA container on that network
+        //   3. Wait until DVWA responds with HTTP 200/302 (max ~2 minutes)
+        //   4. Set default_security_level to "low" in the DVWA PHP config
+        //   5. Initialize the DB and log in via curl to confirm everything works
+        //   6. (Debug) Verify the XSS page is reachable while authenticated
+        // ─────────────────────────────────────────────────────────────────────
         stage('DAST: Start DVWA') {
             steps {
                 script {
 
+                    // 1. Create the Docker network
                     sh "docker network create ${NET_NAME}"
 
+                    // 2. Start DVWA
                     sh """
                         docker run -d \\
                             --name ${DVWA_NAME} \\
@@ -81,6 +109,7 @@ pipeline {
                             vulnerables/web-dvwa
                     """
 
+                    // 3. Wait until DVWA is ready
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -102,19 +131,18 @@ pipeline {
                             '
                     """
 
+                    // 4. Set security level to "low" in the PHP config file
                     sh """docker exec ${DVWA_NAME} sed -i "s/default_security_level' ] = '[^']*'/default_security_level' ] = 'low'/" /var/www/html/config/config.inc.php 2>/dev/null || true"""
 
-
+                    // 5. DB init + login + set security level via curl
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
                             curlimages/curl:latest \\
                             sh -c '
                                 echo "--- DB init ---"
-                                # GET setup page (initialize cookie jar)
                                 curl -sf -c /tmp/jar.txt \\
                                     http://${DVWA_NAME}/setup.php -o /dev/null
-                                # Create the database
                                 curl -sf -b /tmp/jar.txt -c /tmp/jar.txt \\
                                     -X POST http://${DVWA_NAME}/setup.php \\
                                     -d "create_db=Create+%2F+Reset+Database" \\
@@ -122,10 +150,8 @@ pipeline {
                                 echo "DB init done."
 
                                 echo "--- Login ---"
-                                # GET login page (fetch CSRF token)
                                 curl -sf -b /tmp/jar.txt -c /tmp/jar.txt \\
                                     http://${DVWA_NAME}/login.php -o /dev/null
-                                # POST login
                                 curl -sf -b /tmp/jar.txt -c /tmp/jar.txt \\
                                     -X POST http://${DVWA_NAME}/login.php \\
                                     -d "username=admin&password=password&Login=Login" \\
@@ -138,6 +164,15 @@ pipeline {
                                     -d "seclev_submit=Submit&security=low" \\
                                     -L -o /dev/null
                                 echo "Security level set to low."
+
+                                echo "--- Auth check: XSS page ---"
+                                STATUS=\$(curl -so /dev/null -w "%{http_code}" \\
+                                    -b /tmp/jar.txt \\
+                                    http://${DVWA_NAME}/vulnerabilities/xss_r/)
+                                echo "XSS reflected page HTTP status: \$STATUS"
+                                if [ "\$STATUS" != "200" ]; then
+                                    echo "WARNING: XSS page returned \$STATUS — auth may have failed!"
+                                fi
                             '
                     """
 
@@ -146,6 +181,30 @@ pipeline {
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // DAST Stage 2: ZAP XSS scan
+        //
+        // Key fixes vs previous version:
+        //
+        //   Authentication:
+        //     DVWA uses a CSRF token (user_token) on the login form.
+        //     ZAP's built-in form auth handles CSRF tokens automatically
+        //     when the token name is listed under antiCsrfTokenNames.
+        //     We keep the form auth approach but move antiCsrfTokenNames
+        //     under the context (not under env.parameters where ZAP ignores it).
+        //
+        //   Spider:
+        //     Added ajaxSpider after the traditional spider to discover
+        //     JavaScript-rendered links inside the authenticated DVWA session.
+        //     The traditional spider alone misses most /vulnerabilities/ pages.
+        //
+        //   Active Scan policy:
+        //     "defaultStrength: disabled" is not a valid ZAP value and was
+        //     silently ignored.  The correct way to suppress all other rules
+        //     is "defaultThreshold: off" — this disables every rule that is
+        //     not explicitly listed below.  The four XSS rules are given
+        //     explicit strength/threshold values so they run normally.
+        // ─────────────────────────────────────────────────────────────────────
         stage('DAST: ZAP XSS Scan') {
             steps {
                 script {
@@ -173,7 +232,7 @@ env:
       verification:
         method: response
         loggedInRegex: "(?i)(logout|DVWA Security|Welcome)"
-        loggedOutRegex: "(?i)(login.php|Login)"
+        loggedOutRegex: "(?i)(login\\.php|Login Required)"
     sessionManagement:
       method: cookie
     users:
@@ -181,23 +240,42 @@ env:
       credentials:
         username: "admin"
         password: "password"
+    technology: {}
+    # CSRF token name — must be declared at context level so ZAP
+    # extracts it from the login page before submitting the form.
+    antiCsrfTokenNames:
+    - user_token
   parameters:
     failOnError: false
     failOnWarning: false
     progressToStdout: true
-    antiCsrfTokenNames:
-    - user_token
 
 jobs:
+# ── Traditional spider (fast, link-based) ──────────────────────────────────
 - type: spider
   parameters:
     context: dvwa
     user: admin
     url: "http://${DVWA_NAME}/"
     maxDuration: 3
-    maxChildren: 30
+    maxChildren: 50
     acceptCookies: true
 
+# ── Ajax spider (JS-rendered pages / dynamic navigation) ───────────────────
+# Discovers /vulnerabilities/* pages that the traditional spider misses
+# because they are linked from a JavaScript-driven side menu.
+- type: ajaxSpider
+  parameters:
+    context: dvwa
+    user: admin
+    url: "http://${DVWA_NAME}/"
+    maxDuration: 3
+
+# ── Active Scan — XSS rules only ───────────────────────────────────────────
+# defaultThreshold: off   → disables EVERY rule not listed below.
+# Only the four XSS rule IDs are given explicit thresholds, so only
+# those four will fire.  This replaces the invalid "disabled" strength
+# that was silently ignored in the previous configuration.
 - type: activeScan
   parameters:
     context: dvwa
@@ -205,9 +283,7 @@ jobs:
     maxRuleDurationInMins: 10
     maxScanDurationInMins: 20
   policyDefinition:
-    # defaultStrength: disabled → all unlisted rules are turned off
-    # Only the XSS rules below are active, reducing false positives
-    defaultStrength: disabled
+    defaultStrength: medium
     defaultThreshold: off
     rules:
     - id: 40012
@@ -256,7 +332,19 @@ jobs:
             }
         }
 
-
+        // ─────────────────────────────────────────────────────────────────────
+        // DAST Stage 3: AI validation and GitHub Issue
+        //
+        // scripts/zap_analyze.py:
+        //   1. Extracts XSS findings (rule IDs 40012/40014/40016/40017) from
+        //      zap-report.json
+        //   2. Asks Groq LLM for each finding: true or false positive?
+        //   3. Writes all true positives with their PoCs into a single GitHub Issue
+        //   4. Saves full results to zap-analysis.json
+        //
+        // --network host → Python container needs internet for Groq + GitHub APIs.
+        // BUILD_NUMBER is passed so the GitHub Issue title includes the build no.
+        // ─────────────────────────────────────────────────────────────────────
         stage('DAST: AI Analysis & GitHub Issue') {
             steps {
                 script {
@@ -272,6 +360,7 @@ jobs:
                             -e GROQ_API_KEY=${GROQ_API_KEY} \\
                             -e GITHUB_TOKEN=${GITHUB_TOKEN} \\
                             -e GITHUB_REPO=${GITHUB_REPO} \\
+                            -e BUILD_NUMBER=${BUILD_NUMBER} \\
                             python:3.11-slim \\
                             sh -c '
                                 pip install requests --quiet --no-cache-dir
@@ -285,7 +374,9 @@ jobs:
         }
     }
 
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // Post Actions — runs on every outcome (success, failure, abort)
+    // ─────────────────────────────────────────────────────────────────────────
     post {
         always {
             sh """
