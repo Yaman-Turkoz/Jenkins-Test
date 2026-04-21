@@ -46,19 +46,28 @@ pipeline {
         stage('Semgrep Scan') {
             steps {
                 script {
+                    // Translate the in-container workspace path to its
+                    // host-side equivalent. Without this the -v mount fails.
+                    def hostWorkspace = env.WORKSPACE.replace(
+                        '/var/jenkins_home',
+                        env.HOST_JENKINS_HOME
+                    )
+
                     sh """
-                        semgrep scan . \
-                            --config=semgrep-rules/xss.yaml \
-                            --json \
-                            --output=semgrep-report.json || true
+                        docker run --rm \\
+                            -v ${hostWorkspace}:/src \\
+                            semgrep/semgrep \\
+                            semgrep scan /src \\
+                            --config=/src/semgrep-rules/xss.yaml \\
+                            --json > semgrep-report.json
                     """
-        
+
                     def reportText = readFile('semgrep-report.json').trim()
                     if (!reportText) error("Semgrep report is empty — scan may have failed.")
-        
+
                     def report   = new groovy.json.JsonSlurper().parseText(reportText)
                     def findings = report.results.size()
-        
+
                     if (findings > 0) {
                         echo "Semgrep: ${findings} security finding(s) detected!"
                         error("Semgrep findings present — stopping pipeline.")
