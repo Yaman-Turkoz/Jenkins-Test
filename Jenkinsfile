@@ -1,15 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// @NonCPS Helper Methods
-//
-// Jenkins CPS (Continuation Passing Style) engine serializes the pipeline
-// state to disk between steps. groovy.json.JsonSlurper and the LazyMap/LazyList
-// objects it produces are NOT serializable, which causes a
-// NotSerializableException if they are kept as live variables across steps.
-//
-// @NonCPS methods are excluded from CPS serialization entirely.
-// They must be fast, side-effect-free, and return only serializable types
-// (primitives like int, String, boolean).
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 @NonCPS
 int countSemgrepFindings(String reportText) {
@@ -23,26 +12,11 @@ int countZapAlerts(String reportText) {
     return report.site?.collectMany { it.alerts ?: [] }?.size() ?: 0
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 pipeline {
     agent any
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Environment Variables
-    //
-    // BUILD_NUMBER is appended to network and container names so that
-    // multiple concurrent pipeline runs never collide.
-    //
-    // Required Jenkins credentials:
-    //   - "groq-api-key"  : Secret text  → Groq API key
-    //   - "github-token"  : Secret text  → GitHub PAT with repo + issues scope
-    //
-    // Pre-existing environment variable:
-    //   - HOST_JENKINS_HOME : host-side path of the Jenkins container home dir
-    //                         (e.g. /home/user/jenkins_home)
-    //                         Used to compute the correct -v mount path.
-    // ─────────────────────────────────────────────────────────────────────────
     environment {
         NET_NAME     = "devsecops-net-${BUILD_NUMBER}"
         DVWA_NAME    = "dvwa-${BUILD_NUMBER}"
@@ -57,23 +31,16 @@ pipeline {
 
     stages {
 
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('Clean Workspace') {
             steps { deleteDir() }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('Checkout') {
             steps { checkout scm }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // SAST — Semgrep (installed directly inside the Jenkins image)
-        //
-        // Semgrep runs as a plain shell command, not via docker run.
-        // docker run is only needed for DAST (DVWA + ZAP) because those
-        // containers must communicate over a shared Docker network.
-        // ─────────────────────────────────────────────────────────────────────
         stage('Semgrep Scan') {
             steps {
                 script {
@@ -100,27 +67,13 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 1: Start and prepare DVWA
-        //
-        // Steps:
-        //   1. Create a build-specific Docker network
-        //   2. Start the DVWA container on that network
-        //   3. Wait until DVWA responds with HTTP 200/302 (max ~2 minutes)
-        //   4. Set default_security_level to "low" in the DVWA PHP config
-        //      → ZAP's session starts at "low" security
-        //      → XSS cannot be found in "impossible" mode; the test would be pointless
-        //   5. Initialize the DB, log in, and confirm the security level via curl
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('DAST: Start DVWA') {
             steps {
                 script {
 
-                    // 1. Create the Docker network
                     sh "docker network create ${NET_NAME}"
 
-                    // 2. Start the DVWA container on that network.
-                    //    Container name is unique per build number.
                     sh """
                         docker run -d \\
                             --name ${DVWA_NAME} \\
@@ -128,9 +81,6 @@ pipeline {
                             vulnerables/web-dvwa
                     """
 
-                    // 3. Wait until DVWA is ready to serve HTTP.
-                    //    A curlimages/curl container on the same network can
-                    //    reach DVWA by container name (Docker DNS resolution).
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -152,19 +102,9 @@ pipeline {
                             '
                     """
 
-                    // 4. Set default_security_level to "low" in the DVWA PHP config.
-                    //    We run sed inside the container via docker exec.
-                    //    Original line example:
-                    //      $_DVWA[ 'default_security_level' ] = 'impossible';
-                    //    Target:
-                    //      $_DVWA[ 'default_security_level' ] = 'low';
-                    //
-                    //    NOTE: PHP reads the config on every request,
-                    //          no Apache/PHP-FPM restart needed.
                     sh """docker exec ${DVWA_NAME} sed -i "s/default_security_level' ] = '[^']*'/default_security_level' ] = 'low'/" /var/www/html/config/config.inc.php 2>/dev/null || true"""
 
-                    // 5. Initialize the DB, log in, and confirm security level.
-                    //    All steps run in a single curl container using a cookie jar.
+
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -206,24 +146,6 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 2: ZAP XSS scan
-        //
-        // The ZAP Automation Framework YAML is generated at runtime because
-        // DVWA_NAME changes with each build number.
-        //
-        // Scan strategy:
-        //   - Spider: crawls DVWA pages (authenticated)
-        //   - Active Scan: ONLY XSS rules (40012, 40014, 40016, 40017)
-        //     defaultStrength: disabled → all unlisted rules are turned off
-        //     Only the 4 rules above run; 100+ others are skipped
-        //     → lower false-positive rate, faster scan
-        //
-        // Authentication:
-        //   - ZAP opens its own session via a form POST to login.php
-        //   - Because default_security_level=low was set in the previous stage,
-        //     ZAP's session also starts at "low" security
-        // ─────────────────────────────────────────────────────────────────────
         stage('DAST: ZAP XSS Scan') {
             steps {
                 script {
@@ -232,7 +154,6 @@ pipeline {
                         env.HOST_JENKINS_HOME
                     )
 
-                    // Write the ZAP Automation Framework YAML to the workspace
                     writeFile file: 'zap-automation.yaml', text: """---
 env:
   contexts:
@@ -315,10 +236,6 @@ jobs:
     reportDescription: "Jenkins DAST Pipeline - Build ${BUILD_NUMBER}"
 """
 
-                    // Run the ZAP container
-                    //   --network ${NET_NAME}       → can reach DVWA by container name
-                    //   -v hostWorkspace:/zap/wrk   → reads YAML, writes report here
-                    //   || true                     → ZAP exits 1 when findings exist; don't stop pipeline
                     sh """
                         docker run --rm \\
                             --network ${NET_NAME} \\
@@ -328,8 +245,6 @@ jobs:
                         || true
                     """
 
-                    // Report file check.
-                    // ZAP traditional-json template → reportFile + ".json" = zap-report.json
                     if (!fileExists('zap-report.json')) {
                         echo "WARNING: zap-report.json not found. Creating empty report."
                         writeFile file: 'zap-report.json', text: '{"site":[]}'
@@ -341,26 +256,7 @@ jobs:
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // DAST Stage 3: AI validation and GitHub Issue
-        //
-        // This stage is the Jenkins pipeline equivalent of the
-        // ai_analyze.py + create_issues.py pair used in the workflow.
-        //
-        // scripts/zap_analyze.py:
-        //   1. Extracts XSS findings from zap-report.json
-        //   2. Asks the Groq LLM for each finding: true or false positive?
-        //   3. Writes all true positives with their PoCs into a single GitHub Issue
-        //   4. Saves the full results to zap-analysis.json
-        //
-        // Why python:3.11-slim container?
-        //   The requests library may not be installed in the Jenkins container.
-        //   A Docker container provides a clean, reproducible environment.
-        //
-        // Why --network host?
-        //   The Python script needs internet access to reach the Groq and GitHub APIs.
-        //   devsecops-net is an internal-only network with no internet egress.
-        // ─────────────────────────────────────────────────────────────────────
+
         stage('DAST: AI Analysis & GitHub Issue') {
             steps {
                 script {
@@ -389,12 +285,7 @@ jobs:
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Post Actions — Runs on every outcome (success, failure, abort)
-    //
-    // Without cleanup, DVWA containers and networks accumulate on the host.
-    // "|| true" → silently skip if the resource does not exist.
-    // ─────────────────────────────────────────────────────────────────────────
+
     post {
         always {
             sh """
