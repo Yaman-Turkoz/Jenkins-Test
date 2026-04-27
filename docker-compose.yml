@@ -1,0 +1,35 @@
+services:
+  db:
+    image: mariadb:10
+    environment:
+      MYSQL_ROOT_PASSWORD: dvwa
+      MYSQL_DATABASE: dvwa
+      MYSQL_USER: dvwa
+      MYSQL_PASSWORD: p@ssw0rd
+    networks:
+      - dvwa_net
+
+  dvwa:
+    image: ghcr.io/digininja/dvwa:latest
+    environment:
+      DB_SERVER: db
+    ports:
+      - "8888:80"
+    depends_on:
+      - db
+    networks:
+      - dvwa_net
+
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    user: root
+    command: bash /zap/wrk/run.sh
+    volumes:
+      - ./zap:/zap/wrk
+    networks:
+      - dvwa_net
+    depends_on:
+      - dvwa
+
+networks:
+  dvwa_net:
