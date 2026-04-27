@@ -41,19 +41,10 @@ pipeline {
         }
         stage('ZAP Scan') {
             steps {
-                sh '''
-                    if ! command -v docker-compose > /dev/null 2>&1; then
-                        curl -SL https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 \
-                            -o $HOME/docker-compose
-                        chmod +x $HOME/docker-compose
-                    fi
-                    $HOME/docker-compose up -d db dvwa
-                    $HOME/docker-compose run --rm zap
-                '''
+                sh 'docker-compose run --rm zap'
             }
             post {
                 always {
-                    sh '$HOME/docker-compose down -v || true'
                     archiveArtifacts artifacts: 'zap/reports/dvwa-xss-report.html',
                                      allowEmptyArchive: true
                 }
