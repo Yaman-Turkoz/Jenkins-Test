@@ -28,8 +28,7 @@ services:
       - ./zap:/zap/wrk
     networks:
       - dvwa_net
-    depends_on:
-      - dvwa
 
 networks:
   dvwa_net:
+    name: dvwa_net
