@@ -1,0 +1,36 @@
+env:
+  contexts:
+    - name: dvwa
+      urls:
+        - "http://dvwa/"
+      includePaths:
+        - "http://dvwa/.*"
+      excludePaths:
+        - "http://dvwa/logout.php"
+        - "http://dvwa/setup.php"
+      sessionManagement:
+        method: cookie
+
+  parameters:
+    failOnError: false
+    progressToStdout: true
+
+jobs:
+  - type: spider
+    parameters:
+      context: dvwa
+      url: "http://dvwa/"
+      maxDuration: 5
+      maxDepth: 5
+
+  - type: activeScan
+    parameters:
+      context: dvwa
+      maxScanDurationInMins: 15
+
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk/reports
+      reportFile: dvwa-xss-report
+      reportTitle: "DVWA XSS Scan"
