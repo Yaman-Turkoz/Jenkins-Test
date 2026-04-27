@@ -42,7 +42,7 @@ pipeline {
         stage('ZAP Scan') {
             steps {
                 sh '''
-                    if ! command -v docker-compose &> /dev/null; then
+                    if ! command -v docker-compose > /dev/null 2>&1; then
                         curl -SL https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 \
                             -o /usr/local/bin/docker-compose
                         chmod +x /usr/local/bin/docker-compose
@@ -59,6 +59,7 @@ pipeline {
                 }
             }
         }
+    }
     post {
         always {
             archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
