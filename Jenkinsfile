@@ -14,16 +14,6 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Debug Docker') {
-            steps {
-                sh 'which docker || echo "docker not found"'
-                sh 'docker --version || echo "docker version failed"'
-                sh 'which docker-compose || echo "docker-compose not found"'
-                sh 'docker compose version || echo "docker compose plugin not found"'
-                sh 'ls /usr/local/bin/ | grep -i docker || echo "nothing in /usr/local/bin"'
-                sh 'ls /usr/bin/ | grep -i docker || echo "nothing in /usr/bin"'
-            }
-        }
         stage('Semgrep Scan') {
             steps {
                 script {
@@ -51,6 +41,13 @@ pipeline {
         }
         stage('ZAP Scan') {
             steps {
+                sh '''
+                    if ! command -v docker-compose &> /dev/null; then
+                        curl -SL https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 \
+                            -o /usr/local/bin/docker-compose
+                        chmod +x /usr/local/bin/docker-compose
+                    fi
+                '''
                 sh 'docker-compose up -d db dvwa'
                 sh 'docker-compose run --rm zap'
             }
@@ -62,7 +59,6 @@ pipeline {
                 }
             }
         }
-    }
     post {
         always {
             archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
