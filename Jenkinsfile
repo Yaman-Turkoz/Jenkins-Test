@@ -41,12 +41,12 @@ pipeline {
         }
         stage('ZAP Scan') {
             steps {
-                sh 'docker compose up -d db dvwa'
-                sh 'docker compose run --rm zap'
+                sh 'docker-compose up -d db dvwa'
+                sh 'docker-compose run --rm zap'
             }
             post {
                 always {
-                    sh 'docker compose down -v || true'
+                    sh 'docker-compose down -v || true'
                     archiveArtifacts artifacts: 'zap/reports/dvwa-xss-report.html',
                                      allowEmptyArchive: true
                 }
