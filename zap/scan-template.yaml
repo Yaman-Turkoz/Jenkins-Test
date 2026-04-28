@@ -4,15 +4,12 @@ env:
       urls:
         - "http://dvwa/"
       includePaths:
-        - "http://dvwa/login.php"
-        - "http://dvwa/setup.php"
-        - "http://dvwa/index.php"
-        - "http://dvwa/security.php"   
-        - "http://dvwa/vulnerabilities/xss_.*"
-        #- "http://dvwa/.*"
+        - "http://dvwa/.*"
       excludePaths:
         - "http://dvwa/logout.php"
         - "http://dvwa/setup.php"
+        - "http://dvwa/vulnerabilities/csrf/.*"        # şifre değiştirebilir
+        - "http://dvwa/vulnerabilities/authbypass/.*"  # auth bypass
       sessionManagement:
         method: cookie
 
@@ -36,6 +33,6 @@ jobs:
   - type: report
     parameters:
       template: traditional-html
-      reportDir: /zap/wrk     
+      reportDir: /zap/wrk
       reportFile: dvwa-xss-report
       reportTitle: "DVWA XSS Scan"
