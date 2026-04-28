@@ -4,7 +4,12 @@ env:
       urls:
         - "http://dvwa/"
       includePaths:
-        - "http://dvwa/.*"
+        - "http://dvwa/login.php"
+        - "http://dvwa/setup.php"
+        - "http://dvwa/index.php"
+        - "http://dvwa/security.php"   
+        - "http://dvwa/vulnerabilities/xss_.*"
+        #- "http://dvwa/.*"
       excludePaths:
         - "http://dvwa/logout.php"
         - "http://dvwa/setup.php"
