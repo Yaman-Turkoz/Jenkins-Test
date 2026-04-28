@@ -28,7 +28,6 @@ jobs:
   - type: activeScan
     parameters:
       context: dvwa
-      policy: xss-only
       maxScanDurationInMins: 15
 
   - type: report
