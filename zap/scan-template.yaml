@@ -12,7 +12,6 @@ env:
         - "http://dvwa/vulnerabilities/authbypass/.*"
       sessionManagement:
         method: cookie
-
   parameters:
     failOnError: false
     progressToStdout: true
@@ -25,9 +24,34 @@ jobs:
       maxDuration: 5
       maxDepth: 5
 
+  # Sadece XSS rule'larını içeren custom policy oluştur
+  - type: activeScan-policy
+    parameters:
+      name: xss-only
+    policyDefinition:
+      defaultStrength: off        # Tüm rule'ları varsayılan olarak kapat
+      defaultThreshold: off
+      rules:
+        - id: 40012               # Reflected XSS
+          strength: high
+          threshold: low
+        - id: 40014               # Persistent XSS
+          strength: high
+          threshold: low
+        - id: 40016               # Persistent XSS (Prime)
+          strength: high
+          threshold: low
+        - id: 40017               # Persistent XSS (Spider)
+          strength: high
+          threshold: low
+        - id: 90019               # Server Side Code Injection (XSS vektörü)
+          strength: medium
+          threshold: medium
+
   - type: activeScan
     parameters:
       context: dvwa
+      scanPolicyName: xss-only
       maxScanDurationInMins: 15
 
   - type: report
