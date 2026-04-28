@@ -29,24 +29,21 @@ jobs:
     parameters:
       name: xss-only
     policyDefinition:
-      defaultStrength: off        # Tüm rule'ları varsayılan olarak kapat
-      defaultThreshold: off
+      defaultStrength: "off"        # tırnak içinde
+      defaultThreshold: "off"       # tırnak içinde
       rules:
-        - id: 40012               # Reflected XSS
+        - id: 40012
           strength: high
           threshold: low
-        - id: 40014               # Persistent XSS
+        - id: 40014
           strength: high
           threshold: low
-        - id: 40016               # Persistent XSS (Prime)
+        - id: 40016
           strength: high
           threshold: low
-        - id: 40017               # Persistent XSS (Spider)
+        - id: 40017
           strength: high
           threshold: low
-        - id: 90019               # Server Side Code Injection (XSS vektörü)
-          strength: medium
-          threshold: medium
 
   - type: activeScan
     parameters:
