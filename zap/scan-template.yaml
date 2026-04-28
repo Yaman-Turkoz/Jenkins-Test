@@ -18,21 +18,6 @@ env:
     progressToStdout: true
 
 jobs:
-  - type: scanPolicyDefinition
-    parameters:
-      name: xss-only
-      defaultStrength: medium
-      defaultThreshold: "off"    # varsayılan olarak her şeyi kapat
-    rules:
-      - id: 40012    # Cross Site Scripting (Reflected)
-        threshold: medium
-      - id: 40014    # Cross Site Scripting (Persistent)
-        threshold: medium
-      - id: 40016    # Cross Site Scripting (Persistent) - Prime
-        threshold: medium
-      - id: 40017    # Cross Site Scripting (Persistent) - Spider
-        threshold: medium
-
   - type: spider
     parameters:
       context: dvwa
@@ -43,7 +28,7 @@ jobs:
   - type: activeScan
     parameters:
       context: dvwa
-      policy: xss-only           # sadece bu policy'yi kullan
+      policy: xss-only
       maxScanDurationInMins: 15
 
   - type: report
