@@ -2,14 +2,18 @@
 import urllib.request, urllib.parse, http.cookiejar, re, sys, time
 
 BASE = "http://dvwa"
-jar = http.cookiejar.CookieJar()
-opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+def make_opener():
+    jar = http.cookiejar.CookieJar()
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar)), jar
 
 def get_token(html):
     m = re.search(r"name=['\"]user_token['\"].*?value=['\"]([^'\"]+)", html)
     if not m:
         m = re.search(r"value=['\"]([^'\"]+)['\"].*?name=['\"]user_token['\"]", html)
     return m.group(1) if m else ""
+
+opener, jar = make_opener()
 
 print("[init] Waiting for DVWA...", file=sys.stderr)
 for _ in range(40):
@@ -29,6 +33,9 @@ try:
     time.sleep(5)
 except Exception as e:
     print(f"[init] DB setup error (continuing): {e}", file=sys.stderr)
+
+# DB setup sonrası fresh opener — eski cookie'leri temizle
+opener, jar = make_opener()
 
 print("[init] Logging in...", file=sys.stderr)
 r = opener.open(f"{BASE}/login.php")
