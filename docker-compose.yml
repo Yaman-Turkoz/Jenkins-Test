@@ -31,5 +31,5 @@ services:
 
 networks:
   dvwa_net:
-    name: dvwa_net
+    name: zap-dvwa-lab_dvwa_net
     external: true
