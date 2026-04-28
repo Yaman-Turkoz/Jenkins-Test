@@ -26,6 +26,17 @@ for _ in range(40):
         print(f"[init] Not ready yet: {e}", file=sys.stderr)
         time.sleep(3)
 
+print("[init] Setting up database...", file=sys.stderr)
+try:
+    opener.open(f"{BASE}/setup.php",
+        urllib.parse.urlencode({"create_db": "Create / Reset Database"}).encode())
+    time.sleep(5)
+except Exception as e:
+    print(f"[init] DB setup error (continuing): {e}", file=sys.stderr)
+
+# DB setup sonrası fresh opener — eski cookie'leri temizle
+opener, jar = make_opener()
+
 print("[init] Logging in...", file=sys.stderr)
 r = opener.open(f"{BASE}/login.php")
 token = get_token(r.read().decode())
@@ -39,7 +50,7 @@ opener.open(f"{BASE}/login.php",
 
 r = opener.open(f"{BASE}/index.php")
 if "logout" not in r.read().decode().lower():
-    print("[init] ERROR: Login failed! Make sure DVWA is running and DB is initialized.", file=sys.stderr)
+    print("[init] ERROR: Login failed!", file=sys.stderr)
     sys.exit(1)
 print("[init] Login successful.", file=sys.stderr)
 
