@@ -50,7 +50,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'zap/reports/dvwa-xss-report.html',
+                    archiveArtifacts artifacts: 'zap/dvwa-xss-report.html',
                                      allowEmptyArchive: true
                 }
             }
