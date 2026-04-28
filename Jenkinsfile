@@ -41,7 +41,7 @@ pipeline {
         }
         stage('ZAP Scan') {
             steps {
-                sh 'docker-compose run --rm zap'
+                sh 'docker-compose -f ${WORKSPACE}/docker-compose.yml --project-directory ${WORKSPACE} run --rm zap'
             }
             post {
                 always {
