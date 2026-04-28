@@ -31,6 +31,6 @@ jobs:
   - type: report
     parameters:
       template: traditional-html
-      reportDir: /zap/wrk/reports
+      reportDir: /zap/wrk     
       reportFile: dvwa-xss-report
       reportTitle: "DVWA XSS Scan"
