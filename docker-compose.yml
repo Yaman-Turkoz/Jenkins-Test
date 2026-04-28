@@ -32,3 +32,4 @@ services:
 networks:
   dvwa_net:
     name: dvwa_net
+    external: true    
