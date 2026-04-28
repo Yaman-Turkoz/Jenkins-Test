@@ -13,21 +13,24 @@ def get_token(html):
         m = re.search(r"value=['\"]([^'\"]+)['\"].*?name=['\"]user_token['\"]", html)
     return m.group(1) if m else ""
 
-def try_login(opener):
+def try_login():
+    opener, jar = make_opener()
     try:
         r = opener.open(f"{BASE}/login.php")
         token = get_token(r.read().decode())
         if not token:
-            return False
+            return None, None
         opener.open(f"{BASE}/login.php",
             urllib.parse.urlencode({
                 "username": "admin", "password": "password",
                 "Login": "Login", "user_token": token
             }).encode())
         r = opener.open(f"{BASE}/index.php")
-        return "logout" in r.read().decode().lower()
-    except:
-        return False
+        if "logout" in r.read().decode().lower():
+            return opener, jar
+    except Exception as e:
+        print(f"[init] Login attempt error: {e}", file=sys.stderr)
+    return None, None
 
 opener, jar = make_opener()
 
@@ -42,27 +45,31 @@ for _ in range(40):
         print(f"[init] Not ready yet: {e}", file=sys.stderr)
         time.sleep(3)
 
-# Önce login dene — başarılıysa DB setup'ı atla
-print("[init] Trying login without DB setup...", file=sys.stderr)
-if try_login(opener):
-    print("[init] Login successful (DB already set up).", file=sys.stderr)
-else:
-    # Login başarısız — DB kurulmamış, setup yap
-    print("[init] Login failed, setting up database...", file=sys.stderr)
-    opener, jar = make_opener()
-    try:
-        opener.open(f"{BASE}/setup.php",
-            urllib.parse.urlencode({"create_db": "Create / Reset Database"}).encode())
-        time.sleep(5)
-    except Exception as e:
-        print(f"[init] DB setup error (continuing): {e}", file=sys.stderr)
+# DB setup yap
+print("[init] Setting up database...", file=sys.stderr)
+try:
+    setup_opener, _ = make_opener()
+    setup_opener.open(f"{BASE}/setup.php",
+        urllib.parse.urlencode({"create_db": "Create / Reset Database"}).encode())
+except Exception as e:
+    print(f"[init] DB setup error (continuing): {e}", file=sys.stderr)
 
-    opener, jar = make_opener()
-    print("[init] Logging in after DB setup...", file=sys.stderr)
-    if not try_login(opener):
-        print("[init] ERROR: Login failed after DB setup!", file=sys.stderr)
-        sys.exit(1)
-    print("[init] Login successful.", file=sys.stderr)
+# Login'i retry ile dene — DB setup tamamlanana kadar bekle
+print("[init] Waiting for DB setup to complete...", file=sys.stderr)
+logged_opener = None
+for attempt in range(15):
+    time.sleep(5)
+    print(f"[init] Login attempt {attempt + 1}/15...", file=sys.stderr)
+    logged_opener, jar = try_login()
+    if logged_opener:
+        print("[init] Login successful.", file=sys.stderr)
+        opener = logged_opener
+        break
+    print(f"[init] Not ready yet, retrying...", file=sys.stderr)
+
+if not logged_opener:
+    print("[init] ERROR: Login failed after all attempts!", file=sys.stderr)
+    sys.exit(1)
 
 # Security seviyesini low yap
 r = opener.open(f"{BASE}/security.php")
