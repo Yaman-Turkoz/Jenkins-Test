@@ -25,11 +25,11 @@ services:
     user: root
     command: bash /zap/wrk/run.sh
     volumes:
-      - ./zap:/zap/wrk
+      - ${ZAP_HOST_DIR}:/zap/wrk  
     networks:
       - dvwa_net
 
 networks:
   dvwa_net:
     name: dvwa_net
-    external: true    
+    external: true
