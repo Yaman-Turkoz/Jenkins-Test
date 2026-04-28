@@ -41,7 +41,12 @@ pipeline {
         }
         stage('ZAP Scan') {
             steps {
-                sh 'docker-compose -f ${WORKSPACE}/docker-compose.yml --project-directory ${WORKSPACE} run --rm zap'
+                sh '''
+                    export ZAP_HOST_DIR=${HOST_JENKINS_HOME}/workspace/${JOB_NAME}/zap
+                    docker-compose -f ${WORKSPACE}/docker-compose.yml \
+                        --project-directory ${WORKSPACE} \
+                        run --rm zap
+                '''
             }
             post {
                 always {
