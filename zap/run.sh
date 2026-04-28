@@ -16,4 +16,14 @@ zap.sh -cmd \
   -config "replacer.full_list(0).matchstr=Cookie" \
   -config "replacer.full_list(0).matchregex=false" \
   -config "replacer.full_list(0).replacement=PHPSESSID=${SESSION}; security=low" \
+  -config "scanner.policy=xss-only" \
+  -config "policies.policy(0).name=xss-only" \
+  -config "policies.policy(0).scanner(0).id=40012" \
+  -config "policies.policy(0).scanner(0).enabled=true" \
+  -config "policies.policy(0).scanner(1).id=40014" \
+  -config "policies.policy(0).scanner(1).enabled=true" \
+  -config "policies.policy(0).scanner(2).id=40016" \
+  -config "policies.policy(0).scanner(2).enabled=true" \
+  -config "policies.policy(0).scanner(3).id=40017" \
+  -config "policies.policy(0).scanner(3).enabled=true" \
   -autorun /tmp/scan.yaml
