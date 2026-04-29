@@ -90,7 +90,8 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: 'semgrep-report.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'semgrep-report.json,zap/dvwa-xss-report-json.json',
+                             allowEmptyArchive: true
         }
     }
 }
