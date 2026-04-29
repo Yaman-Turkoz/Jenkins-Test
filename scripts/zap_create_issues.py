@@ -163,7 +163,7 @@ def main():
                     if line:
                         refs_md += f"- {line}\n"
 
-body = f"""## ZAP Security Finding
+            body = f"""## ZAP Security Finding
 
 | Field | Value |
 |-------|-------|
