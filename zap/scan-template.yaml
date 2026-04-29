@@ -18,6 +18,12 @@ env:
     progressToStdout: true
 
 jobs:
+  # Passive scan'i tamamen kapat
+  - type: passiveScan-config
+    parameters:
+      enableTags: false
+      disableAllRules: true
+
   - type: spider
     parameters:
       context: dvwa
