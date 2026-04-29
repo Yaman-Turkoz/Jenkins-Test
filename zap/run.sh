@@ -18,5 +18,4 @@ zap.sh -cmd \
   -config "replacer.full_list(0).replacement=PHPSESSID=${SESSION}; security=low" \
   -autorun /tmp/scan.yaml
 
-echo "[run] Filtering report to XSS only..."
-python3 /zap/wrk/filter-report.py /zap/wrk/dvwa-xss-report.html
+
