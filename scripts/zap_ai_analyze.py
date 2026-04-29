@@ -81,7 +81,7 @@ def build_analysis_prompt(alert_name: str, plugin_id: str, risk_level: str,
 - **Evidence in Response:** `{inst['evidence']}`
 {other_section}"""
 
-    return f"""You are a DAST (Dynamic Application Security Testing) findings triage engine.
+return f"""You are a DAST (Dynamic Application Security Testing) findings triage engine.
 Your ONLY task is to validate whether the ZAP-reported finding represents a real, exploitable vulnerability.
 
 ZAP detected alert `{alert_name}` (Plugin ID: {plugin_id}).
@@ -112,51 +112,50 @@ VALIDATION RULES:
 
 DO NOT:
 - Mention unrelated vulnerabilities or suggest fixing unrelated issues.
-- Provide PoC or Fix sections for FALSE POSITIVE findings.
+- Provide Severity, PoC, Fix, or Attack Flow sections for FALSE POSITIVE instances.
 - Speculate about other potential attack vectors outside this specific finding.
-
-If the finding is FALSE POSITIVE:
-- Explain clearly why the evidence does not confirm exploitability.
-- Skip all sections except Verdict.
-
-If the finding is TRUE POSITIVE:
-- Provide all sections below.
 
 ---
 
-Analyze every instance carefully and produce the following five sections.
+Analyze every instance carefully and produce the following sections.
 Reference actual parameter names, URLs, and payload values from the data above.
 
+The structure below repeats **per TRUE POSITIVE instance**.
+FALSE POSITIVE instances only appear in the Verdict section with a brief explanation — they have no further sections.
+
 ## Verdict
-State clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
-Explain why in 2-4 sentences referencing the actual evidence.
-If there are multiple instances, give a verdict for each one
-(e.g. "Instance 1: TRUE POSITIVE — ..."). Put a new line between each instance verdict.
+For each instance, state clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
+Explain why in 2-3 sentences referencing the actual evidence.
+Format strictly as:
+**Instance N:** TRUE POSITIVE / FALSE POSITIVE — explanation.
+(one instance per line, blank line between each)
 
-## Severity
-*(Skip this section entirely if all instances are FALSE POSITIVE.)*
-Provide an overall severity rating: **Critical / High / Medium / Low**.
+---
+
+Then, for each TRUE POSITIVE instance, output the following four sections.
+Use the exact heading format shown, replacing N with the instance number.
+Separate each instance block with a horizontal rule (---).
+
+## Severity — Instance N
+Provide a severity rating: **Critical / High / Medium / Low**.
 Include a CVSS v3.1 base score estimate and vector string.
-Justify the rating by addressing: authentication required, user interaction needed,
-scope of impact, and whether data/session theft or full account takeover is achievable.
+Justify by addressing: authentication required, user interaction needed,
+scope of impact, and whether session hijacking or account takeover is achievable.
 
-## Proof of Concept
-*(Skip this section entirely if all instances are FALSE POSITIVE.)*
-Write a realistic, step-by-step PoC for an attacker to exploit this finding.
+## Proof of Concept — Instance N
+Write a step-by-step PoC for an attacker to exploit this specific instance.
 Include the exact HTTP request (method, URL, headers, full payload).
-Describe the expected browser-side effect (e.g., alert dialog, cookie theft).
-If the XSS can be used for session hijacking, provide the payload for that as well.
+Describe the expected browser-side effect (alert dialog, cookie theft, etc.).
+If session hijacking is feasible, include that payload as well.
 
-## Fix
-*(Skip this section entirely if all instances are FALSE POSITIVE.)*
-Provide a concrete server-side fix.
-Show a before/after code snippet in the language appropriate to the target (PHP for DVWA).
-Also mention Content-Security-Policy (CSP) as a defense-in-depth measure and give an example header.
-Write all code examples in a single code block.
+## Fix — Instance N
+Provide a concrete server-side fix for this specific instance.
+Show a before/after code snippet in PHP.
+Include a Content-Security-Policy header example as defense-in-depth.
+Write all code in a single code block.
 
-## Attack Flow
-*(Skip this section entirely if all instances are FALSE POSITIVE.)*
-Show the data flow from user input to the XSS sink using arrows, like a tree from top to bottom.
+## Attack Flow — Instance N
+Show the data flow from user input to the XSS sink using arrows (tree, top to bottom).
 Reference the actual parameter, endpoint, and reflection point.
 Write the flow in a single code block.
 Example format:
@@ -171,7 +170,7 @@ Example format:
     JavaScript executes: alert(1)
 
 ---
-Respond **only** with the five Markdown sections above. Do not add any commentary outside them.
+Respond **only** with the sections above. Do not add any commentary outside them.
 """
 
 
