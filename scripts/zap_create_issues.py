@@ -163,7 +163,7 @@ def main():
                     if line:
                         refs_md += f"- {line}\n"
 
-            body = f"""## ZAP Security Finding
+body = f"""## ZAP Security Finding
 
 | Field | Value |
 |-------|-------|
@@ -173,15 +173,9 @@ def main():
 | **CWE** | [CWE-{cwe_id}](https://cwe.mitre.org/data/definitions/{cwe_id}.html) |
 | **WASC** | {wasc_id} |
 
-### Description
-{description}
-
 ### Detected Instances ({len(structured_instances)})
 
 {instances_md}
-
-### Recommended Fix
-{solution}
 {refs_md}
 ---
 *This issue was opened automatically by the ZAP pipeline stage.*
