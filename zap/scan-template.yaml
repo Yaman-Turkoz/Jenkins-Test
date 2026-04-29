@@ -62,3 +62,10 @@ jobs:
       reportDir: /zap/wrk
       reportFile: dvwa-xss-report
       reportTitle: "DVWA XSS Scan"
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: dvwa-xss-report-json
+      reportTitle: "DVWA XSS Scan"
