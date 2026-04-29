@@ -117,11 +117,10 @@ DO NOT:
 
 ---
 
-Analyze every instance carefully and produce the following sections.
-Reference actual parameter names, URLs, and payload values from the data above.
+---
 
-The structure below repeats **per TRUE POSITIVE instance**.
-FALSE POSITIVE instances only appear in the Verdict section with a brief explanation — they have no further sections.
+Analyze every instance carefully and produce the following five sections.
+Reference actual parameter names, URLs, and payload values from the data above.
 
 ## Verdict
 For each instance, state clearly: **TRUE POSITIVE** or **FALSE POSITIVE**.
@@ -130,47 +129,42 @@ Format strictly as:
 **Instance N:** TRUE POSITIVE / FALSE POSITIVE — explanation.
 (one instance per line, blank line between each)
 
----
+## Severity
+*(Skip entirely if all instances are FALSE POSITIVE.)*
+For each TRUE POSITIVE instance, provide a severity rating on its own line.
+Format strictly as:
+**Instance N:** Critical / High / Medium / Low — CVSS v3.1 score X.X (vector string). Justification in 2-3 sentences.
+(one instance per line, blank line between each)
 
-Then, for each TRUE POSITIVE instance, output the following four sections.
-Use the exact heading format shown, replacing N with the instance number.
-Separate each instance block with a horizontal rule (---).
+## Proof of Concept
+*(Skip entirely if all instances are FALSE POSITIVE.)*
+For each TRUE POSITIVE instance, write a step-by-step PoC.
+Format strictly as:
+**Instance N:**
+- Step 1: ...
+- Step 2: ...
+- Expected effect: ...
+- Session hijacking payload (if applicable): ...
+(blank line between each instance)
 
-## Severity — Instance N
-Provide a severity rating: **Critical / High / Medium / Low**.
-Include a CVSS v3.1 base score estimate and vector string.
-Justify by addressing: authentication required, user interaction needed,
-scope of impact, and whether session hijacking or account takeover is achievable.
+## Fix
+*(Skip entirely if all instances are FALSE POSITIVE.)*
+For each TRUE POSITIVE instance, provide a concrete server-side fix in PHP.
+Format strictly as:
+**Instance N:**
+followed by a single code block with before/after and CSP header example.
+(blank line between each instance)
 
-## Proof of Concept — Instance N
-Write a step-by-step PoC for an attacker to exploit this specific instance.
-Include the exact HTTP request (method, URL, headers, full payload).
-Describe the expected browser-side effect (alert dialog, cookie theft, etc.).
-If session hijacking is feasible, include that payload as well.
-
-## Fix — Instance N
-Provide a concrete server-side fix for this specific instance.
-Show a before/after code snippet in PHP.
-Include a Content-Security-Policy header example as defense-in-depth.
-Write all code in a single code block.
-
-## Attack Flow — Instance N
-Show the data flow from user input to the XSS sink using arrows (tree, top to bottom).
-Reference the actual parameter, endpoint, and reflection point.
-Write the flow in a single code block.
-Example format:
-    HTTP GET /page?param=<script>alert(1)</script>
-        ↓
-    Server reads: $_GET['param']  (no sanitization)
-        ↓
-    Output: echo $param  (raw reflection into HTML body)
-        ↓
-    Browser parses: <script>alert(1)</script>
-        ↓
-    JavaScript executes: alert(1)
+## Attack Flow
+*(Skip entirely if all instances are FALSE POSITIVE.)*
+For each TRUE POSITIVE instance, show the taint flow using arrows.
+Format strictly as:
+**Instance N:**
+followed by a single code block with the arrow-based flow.
+(blank line between each instance)
 
 ---
-Respond **only** with the sections above. Do not add any commentary outside them.
+Respond **only** with the five Markdown sections above. Do not add any commentary outside them.
 """
 
 
