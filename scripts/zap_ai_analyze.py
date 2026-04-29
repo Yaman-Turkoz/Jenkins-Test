@@ -81,7 +81,7 @@ def build_analysis_prompt(alert_name: str, plugin_id: str, risk_level: str,
 - **Evidence in Response:** `{inst['evidence']}`
 {other_section}"""
 
-return f"""You are a DAST (Dynamic Application Security Testing) findings triage engine.
+    return f"""You are a DAST (Dynamic Application Security Testing) findings triage engine.
 Your ONLY task is to validate whether the ZAP-reported finding represents a real, exploitable vulnerability.
 
 ZAP detected alert `{alert_name}` (Plugin ID: {plugin_id}).
