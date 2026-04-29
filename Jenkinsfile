@@ -55,6 +55,38 @@ pipeline {
                 }
             }
         }
+        stage('ZAP AI Analysis') {
+            steps {
+                script {
+                    def gitUrl   = env.GIT_URL ?: scm.getUserRemoteConfigs()[0].getUrl()
+                    def repoName = gitUrl
+                        .replaceFirst(/^.*github\.com[\/:]/, '')
+                        .replaceFirst(/\.git$/, '')
+        
+                    withCredentials([
+                        string(credentialsId: 'GITHUB_TOKEN', variable: 'GH_TOKEN'),
+                        string(credentialsId: 'GROQ_API_KEY', variable: 'GROQ_API_KEY'),
+                    ]) {
+                        sh """
+                            REPO=${repoName} \
+                            GH_TOKEN=${GH_TOKEN} \
+                            python3 ${WORKSPACE}/scripts/zap_create_issues.py
+        
+                            REPO=${repoName} \
+                            GH_TOKEN=${GH_TOKEN} \
+                            GROQ_API_KEY=${GROQ_API_KEY} \
+                            python3 ${WORKSPACE}/scripts/zap_ai_analyze.py
+                        """
+                    }
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'zap-created-issues.json',
+                                     allowEmptyArchive: true
+                }
+            }
+        }
     }
     post {
         always {
