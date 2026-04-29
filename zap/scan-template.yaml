@@ -14,6 +14,7 @@ env:
         method: cookie
   parameters:
     failOnError: false
+    failOnWarning: false
     progressToStdout: true
 
 jobs:
@@ -24,13 +25,11 @@ jobs:
       maxDuration: 5
       maxDepth: 5
 
-  # Sadece XSS rule'larını içeren custom policy oluştur
   - type: activeScan-policy
     parameters:
       name: xss-only
     policyDefinition:
-      defaultStrength: "off"        # tırnak içinde
-      defaultThreshold: "off"       # tırnak içinde
+      defaultThreshold: "off"
       rules:
         - id: 40012
           strength: high
@@ -48,7 +47,7 @@ jobs:
   - type: activeScan
     parameters:
       context: dvwa
-      scanPolicyName: xss-only
+      policy: xss-only
       maxScanDurationInMins: 15
 
   - type: report
