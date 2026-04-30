@@ -3,6 +3,7 @@
 $name    = $_GET['name'];
 $command = $_GET['cmd'];
 $code    = $_GET['code'];
+$a    = $_GET['a'];
 $asd
 
 $name = htmlspecialchars($name);
@@ -14,4 +15,5 @@ curl_init($name);
 curl_init($code);
 curl_init($asd);
 
-shell_exec($name);
+echo $a;
+curl_init(command);
