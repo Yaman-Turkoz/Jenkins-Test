@@ -14,4 +14,4 @@ curl_init($name);
 curl_init($code);
 curl_init($asd);
 
-
+shell_exec($name);
