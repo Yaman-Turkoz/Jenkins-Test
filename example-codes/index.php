@@ -12,3 +12,4 @@ echo $command;
 
 curl_init($name);
 curl_init($asd);
+
