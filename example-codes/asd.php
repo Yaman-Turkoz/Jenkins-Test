@@ -13,3 +13,6 @@ echo $code;
 curl_init($name);
 curl_init($code);
 curl_init($asd);
+
+$na = $_GET['name'];
+echo $na;
