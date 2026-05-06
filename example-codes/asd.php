@@ -8,12 +8,13 @@ $asd
 
 $name = htmlspecialchars($name);
 echo $name;
-echo $command;
-echo $code;
+echo htmlspecialchars($command);
+echo htmlspecialchars($code);
 
 curl_init($name);
 curl_init($code);
 curl_init($asd);
 
-echo $a;
-curl_init(command);
+echo htmlspecialchars($a);
+curl_init($command);
+
